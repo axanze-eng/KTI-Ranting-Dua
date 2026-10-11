@@ -535,6 +535,14 @@ body{overscroll-behavior:none}
 #woodTarget.woodHit{animation:woodStrike .23s ease}
 @keyframes woodStrike{50%{transform:translateX(-50%) scale(.85) rotate(-5deg)}}
 @media(max-width:650px){#gameQuestion{top:148px!important;width:96%!important;max-height:56px}#iceBreakInstruction{top:150px!important;max-width:95%!important}#playfield{top:215px!important}#writtenAnswerPanel:has(#woodRiver){height:calc(100% - 245px)!important}}
+/* Ukuran pointer siswa lebih presisi; mode kayu menggunakan sarung tinju. */
+.resultActions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:20px}
+.resultActions button{min-width:145px}
+#handPointer .handPointerIcon{width:30px!important;height:38px!important;left:-15px!important;top:-31px!important;transform:none!important}
+#handPointer .handPointerRing{width:18px!important;height:18px!important;left:-9px!important;top:-9px!important}
+#handPointer .handPointerLabel{font-size:10px;left:-37px;top:15px}
+body:has(#woodRiver) #handPointer .handPointerIcon{display:none!important}
+body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
@@ -774,7 +782,7 @@ body{overscroll-behavior:none}
  <div id="confetti"></div>
  <div class="gameBottom"><button class="ghost" onclick="exitGame()">🏠 Keluar</button><button class="ghost" onclick="toggleCamera()">📷 Kamera</button></div>
  <div id="startCountdown"><div id="startCountdownNumber">5</div><div id="startCountdownText">Bersiap...</div></div>
-<div id="gameMessage"><div class="resultCard glass"><div id="emoji">🎉</div><h2 id="resultTitle"></h2><p id="resultText"></p><button id="nextBtn" class="primary">Lanjut</button></div></div>
+<div id="gameMessage"><div class="resultCard glass"><div id="emoji">🎉</div><h2 id="resultTitle"></h2><p id="resultText"></p><div class="resultActions"><button id="nextBtn" class="primary">Lanjut</button><button id="resultExitBtn" class="danger" onclick="exitGame()" style="display:none">🏠 Keluar</button></div></div></div>
 </section>
 
 <div id="loginModal" class="modal hidden">
@@ -1262,7 +1270,7 @@ function choose(b){
  if(idx===q.correct){xp+=20;streak++;updateHud();showResult('🎉','BENAR!',`Mantap! +20 XP${streak>1?' • Streak '+streak+' 🔥':''}`,true);confetti()}
  else{streak=0;updateHud();showResult('🤪','UPS, BELUM TEPAT!',`Hehe 😜 Jawaban yang benar: <b>${esc(q.a[q.correct])}</b>. Coba lagi di soal berikutnya!`,false)}
 }
-function showResult(e,t,txt,good){if(clapQuestionTimer){clearInterval(clapQuestionTimer);clapQuestionTimer=null;}stopGameTimer();$('emoji').textContent=e;$('resultTitle').textContent=t;$('resultText').innerHTML=txt;$('gameMessage').style.display='flex';$('nextBtn').textContent=gameIndex<gameQuestions.length-1?'Lanjut 🚀':'Lihat Hasil 🏆';}
+function showResult(e,t,txt,good){if(clapQuestionTimer){clearInterval(clapQuestionTimer);clapQuestionTimer=null;}stopGameTimer();$('emoji').textContent=e;$('resultTitle').textContent=t;$('resultText').innerHTML=txt;$('gameMessage').style.display='flex';$('nextBtn').textContent=gameIndex<gameQuestions.length-1?'Lanjut 🚀':'Lihat Hasil 🏆';$('resultExitBtn').style.display='none';}
 $('nextBtn').onclick=()=>{
  $('gameMessage').style.display='none';
  if(gameIndex<gameQuestions.length-1){gameIndex++;renderGameQuestion();handDetected=false;handLocked=false;initialActivationPending=false;cancelFiveSecondCountdown();hideHandGate()}else finishGame();
@@ -1277,7 +1285,7 @@ function saveGameResult(gameType,completed){
 function renderGameResults(){ /* Hasil permainan tersimpan di Firebase dan cache lokal. */ }
 function finishGame(timeUp=false){
  if(!window.__gameResultSavedForRun) saveGameResult(gameQuestions[0]?.type||'pg',!timeUp);
- if(clapQuestionTimer){clearInterval(clapQuestionTimer);clapQuestionTimer=null;}stopGameTimer();stopBombRain();stopCamera();hideHandPointer();$('gameQuestion').textContent=timeUp?'⏰ Waktu habis!':'🏆 Petualangan selesai!';$('playfield').innerHTML='';$('gameMessage').style.display='flex';$('emoji').textContent=timeUp?'⏰':(xp>=gameQuestions.length*15?'🏆':'🌟');$('resultTitle').textContent=timeUp?'WAKTU HABIS':'HASIL AKHIR';$('resultText').innerHTML=`Keren, <b>${esc($('studentName').value||'Petualang')}</b>!<br>⭐ Total XP: <b>${xp}</b><br>🔥 Streak terakhir: <b>${streak}</b>${timeUp?'<br>⏱️ Waktu pengerjaan telah selesai.':''}`;$('nextBtn').textContent='Main Lagi';$('nextBtn').onclick=()=>{window.__gameResultSavedForRun=false;gameIndex=0;xp=0;streak=0;gameDurationMinutes=Math.max(1,Math.min(180,Number(gameQuestions[0]?.duration)||10));gameTimeLeft=gameDurationMinutes*60;updateHud();updateTimerDisplay();gameQuestions.sort(()=>Math.random()-.5);handDetected=false;handLocked=false;initialActivationPending=false;gameHasStarted=false;cancelFiveSecondCountdown();$('gameMessage').style.display='none';renderGameQuestion();showHandGate();handLocked=true;initialActivationPending=false;startCameraStatusWaiting()};
+ if(clapQuestionTimer){clearInterval(clapQuestionTimer);clapQuestionTimer=null;}stopGameTimer();stopBombRain();stopCamera();hideHandPointer();$('gameQuestion').textContent=timeUp?'⏰ Waktu habis!':'🏆 Petualangan selesai!';$('playfield').innerHTML='';$('gameMessage').style.display='flex';$('emoji').textContent=timeUp?'⏰':(xp>=gameQuestions.length*15?'🏆':'🌟');$('resultTitle').textContent=timeUp?'WAKTU HABIS':'HASIL AKHIR';$('resultText').innerHTML=`Keren, <b>${esc($('studentName').value||'Petualang')}</b>!<br>⭐ Total XP: <b>${xp}</b><br>🔥 Streak terakhir: <b>${streak}</b>${timeUp?'<br>⏱️ Waktu pengerjaan telah selesai.':''}`;$('nextBtn').textContent='Main Lagi';$('resultExitBtn').style.display='inline-flex';$('nextBtn').onclick=()=>{window.__gameResultSavedForRun=false;gameIndex=0;xp=0;streak=0;gameDurationMinutes=Math.max(1,Math.min(180,Number(gameQuestions[0]?.duration)||10));gameTimeLeft=gameDurationMinutes*60;updateHud();updateTimerDisplay();gameQuestions.sort(()=>Math.random()-.5);handDetected=false;handLocked=false;initialActivationPending=false;gameHasStarted=false;cancelFiveSecondCountdown();$('gameMessage').style.display='none';renderGameQuestion();showHandGate();handLocked=true;initialActivationPending=false;startCameraStatusWaiting()};
 }
 function updateHud(){$('xp').textContent=xp;$('streak').textContent=streak}
 function confetti(){const c=$('confetti');c.innerHTML='';for(let i=0;i<45;i++){const x=document.createElement('i');x.className='conf';x.style.left=Math.random()*100+'%';x.style.top=(-10-Math.random()*20)+'%';x.style.animationDelay=Math.random()*.35+'s';x.style.background=`hsl(${Math.random()*360},90%,60%)`;c.appendChild(x)}setTimeout(()=>c.innerHTML='',1800)}
@@ -1477,7 +1485,24 @@ function resizeHandCanvas(){
 function drawTrackedHand(lm,burned=false,clearCanvas=true){
  const c=$('handTrackingCanvas');if(!c||!lm)return;
  const ctx=c.getContext('2d');c.classList.add('active');if(clearCanvas)ctx.clearRect(0,0,innerWidth,innerHeight);
- const pts=lm.map(p=>({x:(1-p.x)*innerWidth,y:p.y*innerHeight,z:p.z||0}));
+ const woodMode=gameQuestions[gameIndex]?.type==='isian';
+ const scale=woodMode?1:0.48;
+ const anchor=lm[9];
+ const ax=(1-anchor.x)*innerWidth,ay=anchor.y*innerHeight;
+ const pts=lm.map(p=>({x:ax+((1-p.x)*innerWidth-ax)*scale,y:ay+(p.y*innerHeight-ay)*scale,z:p.z||0}));
+ if(woodMode){
+  // Sarung tinju berukuran setara dengan kayu sasaran.
+  const target=$('woodTarget');const rect=target?.getBoundingClientRect();
+  const size=rect?Math.min(rect.width,rect.height):110;
+  const center=lm[9];const gx=(1-center.x)*innerWidth,gy=center.y*innerHeight;
+  ctx.save();ctx.translate(gx,gy);ctx.shadowColor='#082b48';ctx.shadowBlur=12;
+  ctx.fillStyle='#a7132d';ctx.strokeStyle='#fff1e2';ctx.lineWidth=4;
+  ctx.beginPath();ctx.roundRect(-size*.43,-size*.47,size*.86,size*.78,size*.3);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#e63249';ctx.beginPath();ctx.ellipse(-size*.21,-size*.02,size*.23,size*.28,-.4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#7e1427';ctx.fillRect(-size*.3,size*.26,size*.6,size*.18);
+  ctx.fillStyle='#fff';ctx.font=`bold ${Math.round(size*.23)}px Arial`;ctx.textAlign='center';ctx.fillText('🥊',0,size*.03);
+  ctx.restore();return;
+ }
  const palm=[0,1,2,5,9,13,17];
  const fingers=[[0,1,2,3,4],[0,5,6,7,8],[0,9,10,11,12],[0,13,14,15,16],[0,17,18,19,20]];
  const skin=burned?'#5b2b20':'#d99570';
@@ -1492,20 +1517,20 @@ function drawTrackedHand(lm,burned=false,clearCanvas=true){
  fingers.forEach((chain,fi)=>{
   ctx.lineCap='round';ctx.lineJoin='round';
   ctx.beginPath();chain.forEach((idx,i)=>i?ctx.lineTo(pts[idx].x,pts[idx].y):ctx.moveTo(pts[idx].x,pts[idx].y));
-  ctx.strokeStyle=shadow;ctx.lineWidth=22;ctx.stroke();
+  ctx.strokeStyle=shadow;ctx.lineWidth=11;ctx.stroke();
   ctx.beginPath();chain.forEach((idx,i)=>i?ctx.lineTo(pts[idx].x,pts[idx].y):ctx.moveTo(pts[idx].x,pts[idx].y));
-  ctx.strokeStyle=light;ctx.lineWidth=15;ctx.stroke();
+  ctx.strokeStyle=light;ctx.lineWidth=7;ctx.stroke();
   // Fingertip highlight makes each fingertip clearly visible.
-  const tip=pts[chain[chain.length-1]];ctx.beginPath();ctx.arc(tip.x,tip.y,9,0,Math.PI*2);ctx.fillStyle=light;ctx.fill();
+  const tip=pts[chain[chain.length-1]];ctx.beginPath();ctx.arc(tip.x,tip.y,4.5,0,Math.PI*2);ctx.fillStyle=light;ctx.fill();
  });
  // Palm contour and joints keep the tracked pose visually precise.
  ctx.beginPath();[0,1,2,5,9,13,17,0].forEach((idx,i)=>i?ctx.lineTo(pts[idx].x,pts[idx].y):ctx.moveTo(pts[idx].x,pts[idx].y));
  ctx.strokeStyle=edge;ctx.lineWidth=3;ctx.stroke();
  pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,i===0?5:3.2,0,Math.PI*2);ctx.fillStyle=i===0?shadow:light;ctx.fill();ctx.strokeStyle=edge;ctx.lineWidth=1.5;ctx.stroke()});
  // Soft highlight across the palm for depth.
- const center=pts[9];const grad=ctx.createRadialGradient(center.x-10,center.y-18,2,center.x,center.y,70);
+ const center=pts[9];const grad=ctx.createRadialGradient(center.x-5,center.y-9,2,center.x,center.y,34);
  grad.addColorStop(0,'rgba(255,235,215,.42)');grad.addColorStop(1,'rgba(255,235,215,0)');
- ctx.beginPath();ctx.arc(center.x,center.y,70,0,Math.PI*2);ctx.fillStyle=grad;ctx.fill();
+ ctx.beginPath();ctx.arc(center.x,center.y,34,0,Math.PI*2);ctx.fillStyle=grad;ctx.fill();
 }
 
 function clearTrackedHand(){const c=$('handTrackingCanvas');if(c){c.classList.remove('active');const ctx=c.getContext('2d');ctx.clearRect(0,0,innerWidth,innerHeight)}}
@@ -1574,14 +1599,15 @@ function processHand(r){
   // Bentuk titik sentuh dari seluruh landmark tangan yang terdeteksi (posisi dicerminkan seperti video).
   // Balon benar-benar meletus saat landmark tangan menyentuh area balon di layar.
   const touchPoints=[];
-  r.multiHandLandmarks.forEach(hand=>hand.forEach(pt=>touchPoints.push({x:(1-pt.x)*innerWidth,y:pt.y*innerHeight})));
+  // Hanya ujung telunjuk tiap tangan yang dapat memecahkan balon.
+  r.multiHandLandmarks.forEach(hand=>{const pt=hand[8];if(pt)touchPoints.push({x:(1-pt.x)*innerWidth,y:pt.y*innerHeight});});
   const balloons=[...document.querySelectorAll('#iceBreakLayer .iceBalloon:not(.popped)')];
   let touched=null;
   if(now-icePopCooldown>350){
    touched=balloons.find(b=>{
     // Balon warna lain juga dapat tersentuh dan memberikan penalti.
     const rect=b.getBoundingClientRect();
-    return touchPoints.some(pt=>pt.x>=rect.left-14&&pt.x<=rect.right+14&&pt.y>=rect.top-14&&pt.y<=rect.bottom+14);
+    return touchPoints.some(pt=>pt.x>=rect.left+8&&pt.x<=rect.right-8&&pt.y>=rect.top+8&&pt.y<=rect.bottom-8);
    })||null;
   }
   if(touched){
