@@ -510,6 +510,31 @@ body{overscroll-behavior:none}
  #playfield{top:clamp(230px,30vh,300px)}
 }
 
+
+/* Penyempurnaan area bermain dan permainan kayu */
+#gameQuestion{top:58px!important;left:50%;width:min(720px,65%)!important;padding:7px 12px!important;font-size:clamp(14px,1.65vw,23px)!important;max-height:68px;overflow:auto;pointer-events:none}
+#playfield{top:clamp(155px,23vh,205px)!important;bottom:55px!important}
+#iceBreakInstruction{top:58px!important;left:50%;max-width:58%!important;padding:5px 12px!important;font-size:clamp(12px,1.5vw,19px)!important;pointer-events:none}
+#handPointer .handPointerIcon{display:block!important;transform:scale(.62);transform-origin:top center}
+#handPointer .handPointerRing{width:28px!important;height:28px!important;left:-14px!important;top:-14px!important}
+#handTrackingCanvas{opacity:.72}
+#writtenAnswerPanel:has(#woodRiver){position:absolute!important;inset:auto 2% 54px!important;transform:none!important;width:96%!important;height:calc(100% - clamp(170px,26vh,225px))!important;max-height:none!important;padding:8px!important;background:transparent!important;border:0!important;box-shadow:none!important;pointer-events:none}
+#writtenAnswerPanel:has(#woodRiver) #answerGameTitle,#writtenAnswerPanel:has(#woodRiver) #poseInstruction,#writtenAnswerPanel:has(#woodRiver) #bodyPoseStatus{display:none!important}
+#writtenAnswerPanel:has(#woodRiver) #clapStage{position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:5;background:#07365ce8;padding:8px 16px;border-radius:30px;font-size:clamp(14px,2vw,23px);white-space:nowrap}
+#writtenAnswerPanel:has(#woodRiver) #poseChoices{height:100%;margin:0!important}
+#woodRiver{position:relative;width:100%;height:100%;overflow:hidden;border-radius:22px;background:linear-gradient(#b5efff 0 17%,#39a8d2 18%,#07669d 100%);pointer-events:none}
+.woodWater{position:absolute;inset:25% 0 0;background:repeating-linear-gradient(175deg,#ffffff20 0 8px,#004e8833 9px 35px);animation:waterMove 3s linear infinite}
+@keyframes waterMove{to{background-position:120px 0}}
+#woodStream{position:absolute;top:27%;left:0;width:100%;height:34%;display:flex;gap:12vw;align-items:center;animation:woodFlow 19s linear infinite;width:max-content;padding-left:100vw}
+@keyframes woodFlow{to{transform:translateX(calc(-100% - 100vw))}}
+.floatingLog{flex:0 0 auto;min-width:clamp(140px,19vw,270px);min-height:90px;padding:14px 20px;background:linear-gradient(100deg,#9b5325,#e3a65a 40%,#99501d);border:5px solid #643611;border-radius:46% 18% 18% 46%;box-shadow:inset 0 8px 15px #ffffff55,0 10px 10px #003a6d66;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#231508;text-align:center;font-weight:900}
+.floatingLog span{font-size:clamp(12px,1.5vw,19px);overflow-wrap:anywhere}
+.floatingLog.woodSelected{outline:6px solid #ffed65;filter:brightness(1.25)}
+#woodTarget{position:absolute;left:50%;bottom:7%;transform:translateX(-50%);width:clamp(115px,17vw,205px);height:clamp(88px,13vh,135px);border:5px solid #4e2c11;border-radius:42%;background:linear-gradient(145deg,#d7a15a,#8b471d);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:clamp(35px,5vw,65px);box-shadow:0 15px 0 #623617,0 20px 24px #002c4c88;pointer-events:none}
+#woodTarget small{font-size:12px;color:white;text-shadow:0 2px 3px #000;font-weight:900}
+#woodTarget.woodHit{animation:woodStrike .23s ease}
+@keyframes woodStrike{50%{transform:translateX(-50%) scale(.85) rotate(-5deg)}}
+@media(max-width:650px){#gameQuestion{top:148px!important;width:96%!important;max-height:56px}#iceBreakInstruction{top:150px!important;max-width:95%!important}#playfield{top:215px!important}#writtenAnswerPanel:has(#woodRiver){height:calc(100% - 245px)!important}}
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
@@ -673,7 +698,7 @@ body{overscroll-behavior:none}
     <div><label>Waktu Pengerjaan (menit)</label><input id="qDuration" type="number" min="1" max="180" value="10" placeholder="Contoh: 10"></div>
     <div class="notice" style="margin:0;align-self:end">⏱️ Waktu berlaku untuk seluruh soal dengan kode yang sama. Timer siswa akan berjalan mundur.</div>
    </div>
-   <div class="formGrid"><div><label>Bentuk Soal</label><select id="qType" onchange="updateQuestionTypeUI()"><option value="pg">Pilihan ganda — Balon Udara</option><option value="isian">Isian — Game Tepuk Tangan</option><option value="icebreak">Ice Breaking — Pecahkan Balon Warna</option></select></div><div><label>Petunjuk Gerakan (khusus meloncat)</label><input id="qPoseCorrect" placeholder="Contoh: pose jempol jika benar"></div></div>
+   <div class="formGrid"><div><label>Bentuk Soal</label><select id="qType" onchange="updateQuestionTypeUI()"><option value="pg">Pilihan ganda — Balon Udara</option><option value="isian">Isian — Game Memukul Kayu</option><option value="icebreak">Ice Breaking — Pecahkan Balon Warna</option></select></div><div><label>Petunjuk Gerakan (khusus meloncat)</label><input id="qPoseCorrect" placeholder="Contoh: pose jempol jika benar"></div></div>
     <div id="questionTextField"><label>Pertanyaan</label><input id="qText" placeholder="Tuliskan pertanyaan"></div>
     <div id="qShortAnswerFields" class="hidden"><label>Kunci Jawaban Isian / Essay</label><input id="qExpected" placeholder="Jawaban acuan untuk diperiksa otomatis"></div>
     <div id="qPoseWrongField" class="hidden"><label>Gerakan jika jawaban salah (khusus meloncat)</label><input id="qPoseWrong" placeholder="Contoh: pose wajah bingung"></div>
@@ -1180,15 +1205,17 @@ function renderGameQuestion(){
  if((q.type||'pg')!=='pg'){
   $('iceBreakLayer').classList.add('hidden');$('iceBreakLayer').classList.remove('active');$('iceBreakInstruction').classList.add('hidden');
   stopCamera();stopClapListener();hideHandGate();stopBombRain();$('videoWrap').classList.remove('hidden');$('gameStatus').classList.remove('hidden');panel.classList.remove('hidden');
-  const essay=q.type==='essay';$('answerGameTitle').textContent=essay?'🚶 Game Pindah Posisi — Bergerak ke Jawaban':'👏 Game Tepuk Tangan — Tepuk sesuai jumlah!';
+  const essay=q.type==='essay';$('answerGameTitle').textContent=essay?'🚶 Game Pindah Posisi — Bergerak ke Jawaban':'🪵 Game Memukul Kayu — Pilih dengan pukulan!';
   $('clapSubmitBtn').classList.add('hidden');$('essaySubmitBtn').classList.add('hidden');
   $('clapSubmitBtn').textContent='Deteksi tepukan otomatis';$('essaySubmitBtn').textContent='Deteksi posisi otomatis';
   $('poseChoices').innerHTML='';$('bodyPoseStatus').textContent=essay?'📷 Kamera membaca posisi tubuh. Geser posisi ke kiri atau kanan untuk memilih zona jawaban; tidak perlu meloncat.':'📷 Kamera membaca gerakan kedua tangan. Rapatkan kedua tangan seperti tepuk, lalu pisahkan; tidak memakai mikrofon.';
   if(!essay){
    const nums=[1,2,3,4].sort(()=>Math.random()-.5);window.clapChoiceMap={};
    (q.a||[]).forEach((a,i)=>window.clapChoiceMap[nums[i]]=i);
-   $('poseChoices').innerHTML=`<div class="formGrid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${(q.a||[]).map((a,i)=>`<div style="padding:10px;border-radius:12px;background:#164e63;border:1px solid #67e8f9"><b>${'ABCD'[i]} • ${nums[i]} tepukan</b><div>${esc(a)}</div></div>`).join('')}</div>`;
-   clapTarget=0;clapCount=0;clapArmed=true;window.lastHandsTogether=false;window.lastClapMotion=0;$('clapStage').textContent='⏱️ 10 detik • 👏 Tepukan: 0';$('poseInstruction').textContent='Tepuk tangan di depan kamera. Waktu 10 detik; saat habis, jumlah tepukan otomatis menjadi jawaban.';
+   $('poseChoices').innerHTML=`<div id="woodRiver"><div class="woodWater"></div><div id="woodStream">${(q.a||[]).map((a,i)=>`<div class="floatingLog" data-hits="${nums[i]}"><b>${nums[i]} pukulan</b><span>${'ABCD'[i]}. ${esc(a)}</span></div>`).join('')}</div><div id="woodTarget" aria-label="Kayu untuk dipukul">🪵<small>PUKUL DI SINI</small></div></div>`;
+   clapCount=0;window.woodArmed=true;window.woodLastHit=0;window.woodPrevY=null;
+   $('clapStage').textContent='⏱️ 30 detik • 🪵 Pukulan: 0';
+   $('poseInstruction').textContent='Gerakkan tangan turun ke kayu tengah. Ulangi untuk mengubah pilihan sebelum 30 detik habis.';
   } else {
    const shuffled=[0,1,2,3].sort(()=>Math.random()-.5);window.jumpChoiceMap={};shuffled.forEach((idx,zone)=>window.jumpChoiceMap[zone]=idx);
    $('poseChoices').innerHTML=`<div class="jumpChoiceGrid">${shuffled.map((idx,zone)=>`<div class="jumpChoice" data-zone="${zone}" style="padding:12px;border-radius:12px;background:#164e63;border:2px solid #67e8f9"><b>➡️ Zona ${zone+1} • Pilihan ${'ABCD'[idx]}</b><div>${esc((q.a||[])[idx]||'')}</div></div>`).join('')}</div>`;
@@ -1272,7 +1299,7 @@ function setCountdown(n){
 function hideCountdown(){const c=$('startCountdown');if(c)c.classList.remove('active');}
 function startIntroCountdown(){
  cancelFiveSecondCountdown();stopGameTimer();handLocked=true;handDetected=false;initialActivationPending=false;
- let n=3;setCountdown(n);$('startCountdownText').textContent='Permainan dimulai dalam…';
+ let n=10;setCountdown(n);$('startCountdownText').textContent='Permainan dimulai dalam…';
  if(window.introCountdownTimer)clearInterval(window.introCountdownTimer);
  window.introCountdownTimer=setInterval(()=>{
   n--;
@@ -1287,7 +1314,7 @@ function startIntroCountdown(){
 }
 function startFiveSecondCountdown(){
  if(countdownTimer)return;
- countdownValue=window.__countdownAlreadyShown?1:3;window.__countdownAlreadyShown=true; handLocked=true; stopGameTimer(); setCountdown(countdownValue);
+ countdownValue=10;window.__countdownAlreadyShown=true; handLocked=true; stopGameTimer(); setCountdown(countdownValue);
  countdownTimer=setInterval(()=>{
   countdownValue--;
   if(countdownValue>0){setCountdown(countdownValue);return;}
@@ -1309,13 +1336,13 @@ function startCameraStatusWaiting(){
 }
 window.beginStudentCameraStart=async()=>{
  const isIce=gameQuestions[gameIndex]?.type==='icebreak';
- if(running){if(isIce){gameHasStarted=true;handLocked=false;initialActivationPending=false;hideHandGate();startGameTimer();return;}initialActivationPending=true;handLocked=true;gameHasStarted=false;showHandGate();$('handGateStatus').textContent='✌️ Kamera aktif. Tunjukkan tepat dua jari untuk memulai…';return;}
+ if(running){if(isIce){gameHasStarted=true;handLocked=false;initialActivationPending=false;hideHandGate();startIntroCountdown();return;}initialActivationPending=true;handLocked=true;gameHasStarted=false;showHandGate();$('handGateStatus').textContent='✌️ Kamera aktif. Tunjukkan tepat dua jari untuk memulai…';return;}
  initialActivationPending=!isIce;handLocked=true;
  const b=$('studentStartCameraBtn');if(b){b.disabled=true;b.textContent='⏳ MEMBUKA KAMERA…';}
  $('handGateStatus').textContent='📷 Meminta izin kamera dari browser…';
  await startCamera();
  if(!running&&b){b.disabled=false;b.textContent=isIce?'🔄 COBA LAGI':'🔄 COBA LAGI';}
- if(running&&isIce){gameHasStarted=true;initialActivationPending=false;handLocked=false;handDetected=true;hideHandGate();if(b)b.classList.add('hidden');$('gameStatus').textContent='🎈 Ice Breaking aktif — dekatkan kedua tangan untuk memecahkan balon target.';$('bodyPoseStatus').textContent='Kedua tangan harus terlihat. Dekatkan kedua telapak tangan untuk memecahkan balon.';startGameTimer();}
+ if(running&&isIce){gameHasStarted=true;initialActivationPending=false;handLocked=false;handDetected=true;hideHandGate();if(b)b.classList.add('hidden');$('gameStatus').textContent='🎈 Ice Breaking aktif — dekatkan kedua tangan untuk memecahkan balon target.';$('bodyPoseStatus').textContent='Kedua tangan harus terlihat. Dekatkan kedua telapak tangan untuk memecahkan balon.';startIntroCountdown();}
  else if(running){$('handGateStatus').textContent='📷 Kamera aktif. Tunjukkan telunjuk dan jari tengah, tekuk dua jari lainnya.';}
 };
 
@@ -1331,9 +1358,9 @@ async function startCamera(){
   if(camera||running)return;
   const type=gameQuestions[gameIndex]?.type||'pg';
   // Hands selalu aktif untuk membaca gestur dua jari sebagai tombol mulai pada semua mode.
-  if(window.Hands){hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});hands.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:.55,minTrackingConfidence:.55});hands.onResults(processHand);}
+  if(window.Hands){hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});hands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:.45,minTrackingConfidence:.45});hands.onResults(processHand);}
   if(window.Pose){poseModel=new Pose({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});poseModel.setOptions({modelComplexity:0,smoothLandmarks:true,enableSegmentation:false,minDetectionConfidence:.5,minTrackingConfidence:.5});poseModel.onResults(processBodyPose);}
-  camera=new Camera($('video'),{onFrame:async()=>{try{if(hands)await hands.send({image:$('video')});if(poseModel)await poseModel.send({image:$('video')});}catch(err){console.warn('Frame kamera gagal diproses',err)}},width:640,height:480});
+  camera=new Camera($('video'),{onFrame:async()=>{try{if(hands)await hands.send({image:$('video')});if(poseModel)await poseModel.send({image:$('video')});}catch(err){console.warn('Frame kamera gagal diproses',err)}},width:480,height:360});
   await camera.start();running=true;
   $('gameStatus').textContent=initialActivationPending?'🟢 Kamera aktif — tunjukkan dua jari untuk mulai':type==='essay'?'🟢 Kamera aktif — geser posisi ke zona jawaban':type==='isian'?'🟢 Kamera aktif — tepuk tangan di depan kamera':'🟢 Tangan aktif — arahkan telunjuk ke balon';
   $('handGateStatus').textContent='👋 Kamera aktif. Arahkan tangan ke kamera...';
@@ -1358,24 +1385,40 @@ function rHandsCountLabel(){const n=window.detectedHandCount||0;return n>=2?'2 t
 function startClapRoundCountdown(q){
  if(!q||q.type!=='isian'||selecting||!gameHasStarted||handLocked)return;
  if(clapQuestionTimer)clearInterval(clapQuestionTimer);
- clapSecondsLeft=10;clapCount=0;lastClapAt=0;window.clapPosePrevDist=null;window.clapReady=true;window.lastClapMotion=0;
- $('clapStage').textContent='⏱️ 10 detik • 👏 Tepukan: 0';
- $('poseInstruction').textContent='Mulai tepuk sekarang. Saat hitungan mencapai 0, jawaban langsung dikunci.';
+ clapSecondsLeft=30;clapCount=0;window.woodArmed=true;window.woodPrevY=null;
+ $('clapStage').textContent='⏱️ 30 detik • 🪵 Pukulan: 0';
  clapQuestionTimer=setInterval(()=>{
   if(selecting||$('gameMessage').style.display==='flex'){clearInterval(clapQuestionTimer);clapQuestionTimer=null;return;}
   clapSecondsLeft=Math.max(0,clapSecondsLeft-1);
-  $('clapStage').textContent=`⏱️ ${clapSecondsLeft} detik • 👏 Tepukan: ${clapCount}`;
+  $('clapStage').textContent=`⏱️ ${clapSecondsLeft} detik • 🪵 Pukulan: ${clapCount}`;
   if(clapSecondsLeft>0)return;
-  clearInterval(clapQuestionTimer);clapQuestionTimer=null;selecting=true;stopClapListener();
+  clearInterval(clapQuestionTimer);clapQuestionTimer=null;selecting=true;
   const idx=window.clapChoiceMap?.[clapCount];
-  if(Number.isInteger(idx)){
-   $('poseInstruction').textContent=`🔒 Waktu habis! ${clapCount} tepukan dikunci sebagai pilihan ${'ABCD'[idx]}.`;
-   evaluateChoice(idx,q);
-  }else{
-   $('poseInstruction').textContent=`🔒 Waktu habis! Jumlah tepukan ${clapCount} tidak cocok dengan pilihan 1–4. Jawaban dikunci.`;
-   evaluateChoice(-1,q);
-  }
+  $('poseInstruction').textContent=`🔒 Jawaban dikunci: ${clapCount} pukulan.`;
+  evaluateChoice(Number.isInteger(idx)?idx:-1,q);
  },1000);
+}
+function processWoodHands(allHands){
+ if(!gameHasStarted||handLocked||selecting||!clapQuestionTimer)return;
+ const target=$('woodTarget');if(!target)return;
+ const rect=target.getBoundingClientRect(),now=performance.now();
+ let touching=false;
+ for(const hand of allHands){
+  const tip=hand[8],wrist=hand[0];
+  const x=(1-tip.x)*innerWidth,y=tip.y*innerHeight;
+  const wy=wrist.y*innerHeight;
+  const inside=x>=rect.left-25&&x<=rect.right+25&&y>=rect.top-35&&y<=rect.bottom+35;
+  if(inside&&y>wy-100)touching=true;
+ }
+ if(!touching){window.woodArmed=true;return;}
+ if(window.woodArmed&&now-(window.woodLastHit||0)>240){
+  window.woodArmed=false;window.woodLastHit=now;
+  clapCount=clapCount%4+1;
+  $('clapStage').textContent=`⏱️ ${clapSecondsLeft} detik • 🪵 Pukulan: ${clapCount}`;
+  target.classList.remove('woodHit');void target.offsetWidth;target.classList.add('woodHit');
+  document.querySelectorAll('.floatingLog').forEach(el=>el.classList.toggle('woodSelected',Number(el.dataset.hits)===clapCount));
+  $('poseInstruction').textContent=`Pilihan ${clapCount} pukulan aktif. Pukul lagi untuk mengubah jawaban.`;
+ }
 }
 function processBodyPose(results){
  const status=$('bodyPoseStatus');if(!status)return;
@@ -1385,23 +1428,7 @@ function processBodyPose(results){
  if(!lm){status.textContent=q?.type==='essay'?'🔎 Mencari tubuh… pastikan kepala, bahu, pinggul, dan kaki terlihat.':'🔎 Mencari kedua tangan… letakkan tangan di depan dada.';window.poseFrameState=null;return;}
  const visible=i=>!!lm[i]&&((lm[i].visibility??0)>.42);
  const lw=lm[15],rw=lm[16];
- if(q&&q.type==='isian'&&!selecting){
-  if(!visible(11)||!visible(12)||!visible(15)||!visible(16)){status.textContent='👏 Pastikan bahu dan kedua pergelangan tangan terlihat. Hadapkan badan ke kamera.';window.clapPosePrevDist=null;return;}
-  const shoulder=Math.max(.08,Math.hypot(lm[11].x-lm[12].x,lm[11].y-lm[12].y));
-  const rawDist=Math.hypot(lw.x-rw.x,lw.y-rw.y)/shoulder;
-  const prev=window.clapPosePrevDist;
-  // Satu tepukan dihitung ketika kedua tangan bergerak mendekat setelah sebelumnya terpisah.
-  const closeThreshold=.62, openThreshold=1.05;
-  if(rawDist>openThreshold)window.clapReady=true;
-  const closing=prev!==null&&prev!==undefined&&(prev-rawDist)>.12;
-  if(rawDist<closeThreshold&&closing&&window.clapReady&&now-(window.lastClapMotion||0)>260){
-   window.clapReady=false;window.lastClapMotion=now;clapCount++;lastClapAt=now;
-   $('clapStage').textContent=`⏱️ ${clapSecondsLeft} detik • 👏 Tepukan: ${clapCount}`;
-   $('poseInstruction').textContent='Tepukan tercatat. Teruskan hingga waktu habis; jumlah akhir akan dikunci sebagai jawaban.';
-  }
-  window.clapPosePrevDist=rawDist;
-  status.textContent=`📷 ${rHandsCountLabel()} • Jarak kedua tangan ${rawDist.toFixed(2)}× lebar bahu • Tepukan: ${clapCount}`;return;
- }
+ if(q&&q.type==='isian'&&!selecting){status.textContent='🪵 Arahkan tangan ke kayu di tengah layar dan pukul untuk memilih.';return;}
  if(q&&(q.type||'pg')==='pg'&&!selecting){
   status.textContent='🟢 Kamera tubuh aktif • Gerakan terdeteksi langsung. Arahkan tangan/telunjuk ke balon jawaban.';
   return;
@@ -1512,7 +1539,7 @@ function isTwoFingerGesture(lm){
  const indexOpen=extended(8,6),middleOpen=extended(12,10);
  const ringClosed=curled(16,14),pinkyClosed=curled(20,18);
  // Toleransi kecil untuk kamera laptop, ukuran tangan, dan sudut pergelangan yang berbeda.
- return indexOpen&&middleOpen&&ringClosed&&pinkyClosed;
+ return indexOpen&&middleOpen&&(ringClosed||pinkyClosed);
 }
 function processHand(r){
  if(!running)return;
@@ -1520,7 +1547,7 @@ function processHand(r){
   window.detectedHandCount=0;
   // Setelah sesi sudah aktif, hilangnya tangan hanya menonaktifkan pointer.
   // Tidak mengembalikan siswa ke countdown 5 detik.
-  if(!handLocked)handDetected=false;
+  if(!handLocked && gameQuestions[gameIndex]?.type==='pg')handDetected=false;
   $('gameStatus').textContent='👋 Tangan tidak terdeteksi — tampilkan tangan ke kamera';
   if(initialActivationPending && !$('handGate').classList.contains('hiddenGate'))$('handGateStatus').textContent='📷 Menunggu dua jari...';
   $('dwell').style.display='none';
@@ -1534,7 +1561,7 @@ function processHand(r){
  const detectedHands=r.multiHandLandmarks.length;window.detectedHandCount=detectedHands;
  const currentQuestion=gameQuestions[gameIndex];
  if(currentQuestion&&currentQuestion.type==='icebreak')$('gameStatus').textContent=detectedHands>=2?'🎈 Kedua tangan terdeteksi — rapatkan untuk memecahkan balon':'🎈 Tampilkan kedua tangan ke kamera';
- if(currentQuestion&&currentQuestion.type==='isian')$('gameStatus').textContent=detectedHands>=2?'👏 Kedua tangan terdeteksi dan ditampilkan di layar':'👏 Terdeteksi '+detectedHands+' tangan — tampilkan kedua tangan ke kamera';
+ if(currentQuestion&&currentQuestion.type==='isian')$('gameStatus').textContent='🪵 Tangan terdeteksi: '+detectedHands+' — pukul kayu tengah';
  const tip=lm[8],x=(1-tip.x)*innerWidth,y=tip.y*innerHeight;
  // Semua titik tangan ikut dihitung. Jadi bom langsung meledak saat bagian tangan
  // (bukan hanya ujung telunjuk) menyentuh/masuk ke area bom.
@@ -1552,7 +1579,7 @@ function processHand(r){
   let touched=null;
   if(now-icePopCooldown>350){
    touched=balloons.find(b=>{
-    if(!(window.iceTargetColors||[]).includes(b.dataset.color))return false;
+    // Balon warna lain juga dapat tersentuh dan memberikan penalti.
     const rect=b.getBoundingClientRect();
     return touchPoints.some(pt=>pt.x>=rect.left-14&&pt.x<=rect.right+14&&pt.y>=rect.top-14&&pt.y<=rect.bottom+14);
    })||null;
@@ -1564,16 +1591,19 @@ function processHand(r){
    $('iceBreakLayer').appendChild(burst);setTimeout(()=>burst.remove(),450);
    // Efek suara pendek seperti balon meletus; tetap aman bila browser memblokir audio.
    try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){const ac=new AC(),osc=ac.createOscillator(),gain=ac.createGain();osc.type='triangle';osc.frequency.setValueAtTime(240,ac.currentTime);osc.frequency.exponentialRampToValueAtTime(65,ac.currentTime+.09);gain.gain.setValueAtTime(.18,ac.currentTime);gain.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.11);osc.connect(gain);gain.connect(ac.destination);osc.start();osc.stop(ac.currentTime+.12);osc.onended=()=>ac.close();}}catch(_e){}
-   icePopped++;setTimeout(()=>touched.remove(),330);
+   const isCorrectColor=(window.iceTargetColors||[]).includes(touched.dataset.color);
+   if(isCorrectColor){icePopped++;xp+=5;}else{xp=Math.max(0,xp-5);gameTimeLeft=Math.max(0,gameTimeLeft-5);updateTimerDisplay();$('gameStatus').textContent='⚠️ Balon salah! -5 poin, -5 detik';}
+   updateHud();setTimeout(()=>touched.remove(),330);
    const remainingTargets=[...document.querySelectorAll('#iceBreakLayer .iceBalloon:not(.popped)')].filter(b=>(window.iceTargetColors||[]).includes(b.dataset.color));
    $('gameStatus').textContent=`💥 Tangan menyentuh balon! Balon target dipecahkan: ${icePopped}`;
-   if(!remainingTargets.length){selecting=true;xp=icePopped*5;updateHud();stopGameTimer();saveGameResult('icebreak',true);showResult('🎉','ICE BREAKING SELESAI',`Hebat! Kamu memecahkan semua ${icePopped} balon sesuai warna.`,true);}
+   if(!remainingTargets.length){selecting=true;updateHud();stopGameTimer();saveGameResult('icebreak',true);showResult('🎉','ICE BREAKING SELESAI',`Hebat! Kamu memecahkan semua ${icePopped} balon sesuai warna.`,true);}
   }
   $('bodyPoseStatus').textContent=`✋ Tangan terdeteksi di kamera • Sentuh balon target dengan tangan di layar • Balon pecah: ${icePopped}`;
   return;
  }
 
 
+ if(currentQuestion?.type==='isian')processWoodHands(r.multiHandLandmarks);
  // Setiap sesi wajib menunjukkan dua jari; countdown hanya pertama kali.
  if(initialActivationPending){
   const twoFingers=isTwoFingerGesture(lm);
@@ -1620,7 +1650,7 @@ function processHand(r){
   if(found){found.classList.add('hovered');$('dwell').style.display='block'}else $('dwell').style.display='none'
  }
  if(found&&!selecting){
-  const p=Math.min((performance.now()-dwellStart)/1100,1);
+  const p=Math.min((performance.now()-dwellStart)/480,1);
   $('progressCircle').style.strokeDashoffset=(213*(1-p)).toFixed(1);
   const br=found.getBoundingClientRect();$('dwell').style.left=(br.left+br.width/2)+'px';$('dwell').style.top=(br.top+br.height/2)+'px';
   if(p>=1)choose(found)
