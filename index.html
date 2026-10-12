@@ -708,7 +708,7 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
     <div><label>Waktu Pengerjaan (menit)</label><input id="qDuration" type="number" min="1" max="180" value="10" placeholder="Contoh: 10"></div>
     <div class="notice" style="margin:0;align-self:end">⏱️ Waktu berlaku untuk seluruh soal dengan kode yang sama. Timer siswa akan berjalan mundur.</div>
    </div>
-   <div class="formGrid"><div><label>Bentuk Soal</label><select id="qType" onchange="updateQuestionTypeUI()"><option value="pg">Pilihan ganda — Balon Udara</option><option value="isian">Isian — Game Memukul Kayu</option><option value="icebreak">Ice Breaking — Pecahkan Balon Warna</option></select></div></div>
+   <div class="formGrid"><div><label>Bentuk Soal</label><select id="qType" onchange="updateQuestionTypeUI()"><option value="pg">Pilihan ganda — Balon Udara</option><option value="isian">Isian — Game Tim Perahu</option><option value="icebreak">Ice Breaking — Pecahkan Balon Warna</option></select></div></div>
     <div id="questionTextField"><label>Pertanyaan</label><input id="qText" placeholder="Tuliskan pertanyaan"><label>Gambar Pertanyaan (opsional)</label><input type="file" id="qImage" accept="image/*"><img id="qImagePreview" style="display:none;max-width:210px;max-height:150px;margin:8px"><button type="button" class="ghost" onclick="clearQuestionImage()">Hapus Gambar Pertanyaan</button></div>
     <div id="qShortAnswerFields" class="hidden"><label>Kunci Jawaban Isian / Essay</label><input id="qExpected" placeholder="Jawaban acuan untuk diperiksa otomatis"></div>
     <div id="qPoseWrongField" class="hidden"><label>Gerakan jika jawaban salah (khusus meloncat)</label><input id="qPoseWrong" placeholder="Contoh: pose wajah bingung"></div>
