@@ -749,7 +749,7 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
 <section id="game" class="screen hidden">
   <div class="gameMountain m1"></div><div class="gameMountain m2"></div><div class="gameMountain m3"></div><div class="gameMountain m4"></div>
  <div class="cloud" style="top:95px;left:-180px"></div><div class="cloud" style="top:310px;left:30%;animation-delay:-11s;transform:scale(.75)"></div>
- <div id="videoWrap"><video id="video" autoplay muted playsinline></video><div id="faceBurnEffect"><span class="faceSooth a"></span><span class="faceSooth b"></span><span class="faceSooth c"></span><span class="faceSooth d"></span><span class="faceBurnText">🔥 GOSONG!</span></div></div>
+ <div id="videoWrap"><button id="cameraZoomBtn" type="button" onclick="cycleCameraZoom()" title="Ubah luas bidang kamera" style="position:absolute;top:100%;right:0;margin-top:5px;z-index:60;pointer-events:auto;padding:7px 10px;background:#123c78;color:white;border:1px solid #fff;border-radius:9px;font-size:12px;white-space:nowrap">🎯 Area kamera 1.7×</button><video id="video" autoplay muted playsinline></video><div id="faceBurnEffect"><span class="faceSooth a"></span><span class="faceSooth b"></span><span class="faceSooth c"></span><span class="faceSooth d"></span><span class="faceBurnText">🔥 GOSONG!</span></div></div>
  <div id="handGate">
   <div class="handGateCard">
    <div class="handIcon" aria-hidden="true">
@@ -1360,6 +1360,31 @@ async function activateCameraFromButton(){
  await startCamera();
  buttons.forEach(b=>{b.disabled=false;b.textContent='📷 Aktifkan Kamera'});
 }
+// IFP: persempit bidang analisis kamera (digital crop) agar gerakan lebih presisi.
+let cameraZoom=Number(localStorage.getItem('randuCameraZoom')||'1.7');
+let autoFrameEnabled=true, frameCenterX=.5, frameCenterY=.5, lastPoseSeen=0;
+if(![1,1.4,1.7,2,2.4].includes(cameraZoom))cameraZoom=1.7;
+const cameraAnalysisCanvas=document.createElement('canvas');
+cameraAnalysisCanvas.width=480;cameraAnalysisCanvas.height=360;
+const cameraAnalysisCtx=cameraAnalysisCanvas.getContext('2d',{alpha:false});
+let lastFrameCrop={x:0,y:0,w:1,h:1};
+function updateCameraZoom(){
+ const v=$('video');if(v){v.style.transform=`scaleX(-1) scale(${cameraZoom})`;v.style.transformOrigin=`${frameCenterX*100}% ${frameCenterY*100}%`;}
+ const b=$('cameraZoomBtn');if(b)b.textContent=`🎯 Area kamera ${cameraZoom}×`;
+}
+window.cycleCameraZoom=()=>{
+ const steps=[1,1.4,1.7,2,2.4];cameraZoom=steps[(steps.indexOf(cameraZoom)+1)%steps.length];
+ localStorage.setItem('randuCameraZoom',String(cameraZoom));updateCameraZoom();
+};
+function getCameraAnalysisFrame(video){
+ if(!video.videoWidth||!video.videoHeight)return video;
+ const sw=video.videoWidth/cameraZoom,sh=video.videoHeight/cameraZoom;
+ const cx=Math.max(sw/2,Math.min(video.videoWidth-sw/2,frameCenterX*video.videoWidth));
+ const cy=Math.max(sh/2,Math.min(video.videoHeight-sh/2,frameCenterY*video.videoHeight));
+ lastFrameCrop={x:(cx-sw/2)/video.videoWidth,y:(cy-sh/2)/video.videoHeight,w:sw/video.videoWidth,h:sh/video.videoHeight};
+ cameraAnalysisCtx.drawImage(video,cx-sw/2,cy-sh/2,sw,sh,0,0,480,360);
+ return cameraAnalysisCanvas;
+}
 let cameraOpening=false;
 async function openCompatibleCamera(video){
  if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){
@@ -1391,15 +1416,17 @@ async function startCamera(){
   video.setAttribute('playsinline','');video.muted=true;video.autoplay=true;
   video.srcObject=stream;
   await video.play();
+  updateCameraZoom();
   const type=gameQuestions[gameIndex]?.type||'pg';
-  if(window.Hands){hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});hands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:.45,minTrackingConfidence:.45});hands.onResults(processHand);}
-  if(window.Pose){poseModel=new Pose({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});poseModel.setOptions({modelComplexity:0,smoothLandmarks:true,enableSegmentation:false,minDetectionConfidence:.5,minTrackingConfidence:.5});poseModel.onResults(processBodyPose);}
+  frameCenterX=.5;frameCenterY=.5;
+  if(window.Hands){hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});hands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:.4,minTrackingConfidence:.4});hands.onResults(processHand);}
+  if(window.Pose){poseModel=new Pose({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});poseModel.setOptions({modelComplexity:0,smoothLandmarks:true,enableSegmentation:false,minDetectionConfidence:.42,minTrackingConfidence:.42});poseModel.onResults(processBodyPose);}
   let active=true, busy=false, frameHandle=0;
   const tick=async()=>{
    if(!active)return;
    if(!busy && video.readyState>=2){
     busy=true;
-    try{if(hands)await hands.send({image:video});if(active&&poseModel)await poseModel.send({image:video});}
+    try{const frame=getCameraAnalysisFrame(video);if(hands)await hands.send({image:frame});if(active&&poseModel)await poseModel.send({image:frame});}
     catch(e){console.warn('Pemrosesan frame:',e)}finally{busy=false;}
    }
    if(active)frameHandle=requestAnimationFrame(tick);
@@ -1469,9 +1496,26 @@ function processWoodHands(allHands){
   $('poseInstruction').textContent=`Pilihan ${clapCount} pukulan aktif. Pukul lagi untuk mengubah jawaban.`;
  }
 }
+function autoCenterOnBody(landmarks){
+ if(!autoFrameEnabled||!landmarks)return;
+ // Koordinat MediaPipe berada pada bidang hasil crop; ubah kembali ke bidang kamera asli.
+ const indices=[0,11,12,23,24,15,16];
+ const pts=indices.map(i=>landmarks[i]).filter(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&(p.visibility===undefined||p.visibility>.48));
+ if(pts.length<3)return;
+ const xs=pts.map(p=>lastFrameCrop.x+p.x*lastFrameCrop.w);
+ const ys=pts.map(p=>lastFrameCrop.y+p.y*lastFrameCrop.h);
+ const targetX=xs.reduce((a,b)=>a+b,0)/xs.length;
+ const targetY=ys.reduce((a,b)=>a+b,0)/ys.length;
+ // Filter dan dead zone mencegah gambar bergoyang akibat gerakan tangan.
+ const dx=targetX-frameCenterX,dy=targetY-frameCenterY;
+ if(Math.abs(dx)>.035)frameCenterX=Math.max(.12,Math.min(.88,frameCenterX+dx*.075));
+ if(Math.abs(dy)>.045)frameCenterY=Math.max(.12,Math.min(.88,frameCenterY+dy*.055));
+ lastPoseSeen=performance.now();
+ const v=$('video');if(v)v.style.transformOrigin=`${frameCenterX*100}% ${frameCenterY*100}%`;
+}
 function processBodyPose(results){
  const status=$('bodyPoseStatus');if(!status)return;
- const lm=results.poseLandmarks;const q=gameQuestions[gameIndex];const now=performance.now();
+ const lm=results.poseLandmarks;if(lm)autoCenterOnBody(lm);const q=gameQuestions[gameIndex];const now=performance.now();
  if(initialActivationPending&&!gameHasStarted){status.textContent='✌️ Kamera membaca gestur mulai. Tunjukkan tepat dua jari.';return;}
  if(handLocked){status.textContent='⏳ Bersiap… permainan dimulai setelah hitungan mundur selesai.';return;}
  if(!lm){status.textContent=q?.type==='essay'?'🔎 Mencari tubuh… pastikan kepala, bahu, pinggul, dan kaki terlihat.':'🔎 Mencari kedua tangan… letakkan tangan di depan dada.';window.poseFrameState=null;return;}
