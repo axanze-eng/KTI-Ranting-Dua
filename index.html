@@ -983,16 +983,43 @@ window.showHome=()=>{stopCamera();show('home')};
 window.openStudent=()=>{loadStudentSetup();show('studentSetup')};
 window.openLogin=role=>{loginRole=role;$('loginTitle').textContent=role==='admin'?'🛡️ Login Admin':'👨‍🏫 Login Guru';$('loginHint').textContent=role==='admin'?'Masukkan kredensial admin yang telah disimpan.':'';$('loginUser').value='';$('loginPass').value='';$('loginModal').classList.remove('hidden');setTimeout(()=>$('loginUser').focus(),50)};
 window.closeLogin=()=>$('loginModal').classList.add('hidden');
-window.doLogin=()=>{
+window.doLogin=async()=>{
  const u=$('loginUser').value.trim(),p=$('loginPass').value;
- if(loginRole==='admin'){
-  if(u===admin.username&&p===admin.password){$('loginModal').classList.add('hidden');loadAdmin();show('adminScreen')}
-  else alert('Username atau password admin salah.');
- }else{
-  const t=teachers.find(x=>String(x.username||'').trim().toLowerCase()===u.toLowerCase()&&String(x.password||'')===p);
-  if(!t){alert('Username atau password guru salah.');return}
-  currentTeacher=t;$('loginModal').classList.add('hidden');try{loadTeacher();show('teacherScreen')}catch(err){console.error(err);show('teacherScreen');alert('Panel guru dibuka, tetapi ada komponen yang gagal dimuat: '+err.message)}
- }
+ if(!u||!p){alert('Masukkan username dan password.');return;}
+ const btn=$('loginModal').querySelector('button[onclick="doLogin()"]');
+ if(btn){btn.disabled=true;btn.dataset.originalText ||= btn.textContent;btn.textContent='⏳ Memeriksa akun Firebase...';}
+ try{
+  // Baca langsung dari server agar akun yang dibuat pada perangkat lain juga dapat masuk.
+  const database=window.firebaseDB;
+  if(!database)throw new Error('Firebase belum tersedia. Periksa internet dan muat ulang halaman.');
+  const path=loginRole==='admin'?K.admin:K.teachers;
+  let snap;
+  try{
+   snap=await Promise.race([
+    database.ref('pgroRantingDua/'+path).once('value'),
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Koneksi Firebase terlalu lama. Periksa internet dan izin database.')),12000))
+   ]);
+  }catch(err){throw new Error((err.code==='PERMISSION_DENIED'||/permission.denied/i.test(err.message||''))?'Akses Firebase ditolak (permission_denied). Periksa Realtime Database Rules.':err.message||String(err));}
+  if(!snap.exists()){
+   throw new Error('Data akun '+(loginRole==='admin'?'admin':'guru')+' belum ditemukan di Firebase. Masuk sebagai admin dan daftarkan akun guru terlebih dahulu.');
+  }
+  if(loginRole==='admin'){
+   const remote=snap.val();
+   admin=remote;
+   if(u!==String(remote.username||'')||p!==String(remote.password||'')){alert('Username atau password admin salah.');return;}
+   $('loginModal').classList.add('hidden');loadAdmin();show('adminScreen');
+  }else{
+   const value=snap.val();
+   teachers=(Array.isArray(value)?value:Object.values(value||{})).filter(x=>x&&typeof x==='object');
+   try{localStorage.setItem(K.teachers,JSON.stringify(teachers));}catch(_){}
+   const t=teachers.find(x=>String(x.username||'').trim().toLowerCase()===u.toLowerCase()&&String(x.password||'')===p);
+   if(!t){alert('Username atau password guru salah, atau akun belum terdaftar di Firebase.');return;}
+   currentTeacher=t;
+   $('loginModal').classList.add('hidden');
+   try{loadTeacher();show('teacherScreen');}catch(err){console.error('Panel guru:',err);show('teacherScreen');alert('Login berhasil, tetapi panel guru mengalami kendala: '+err.message);}
+  }
+ }catch(err){console.error('Login Firebase:',err);alert('Tidak dapat masuk: '+(err.message||err));window.firebaseStatus?.('❌ Login Firebase gagal: '+(err.message||err),'error');}
+ finally{if(btn){btn.disabled=false;btn.textContent=btn.dataset.originalText||'Masuk';}}
 };
 
 function applyHomepageIdentity(){
