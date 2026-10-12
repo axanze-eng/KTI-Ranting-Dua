@@ -1909,6 +1909,8 @@ window.__gameApi={
  setWoodAnswer:(answerIdx)=>{const hit=Object.keys(window.clapChoiceMap||{}).find(k=>Number(window.clapChoiceMap[k])===Number(answerIdx));if(hit!==undefined){clapCount=Number(hit);window.clapCount=clapCount;}return clapCount;},
  resolveIceBalloon:(balloon)=>{if(!balloon||balloon.classList.contains('popped')||selecting)return;const wanted=(window.iceTargetColors||[]).includes(balloon.dataset.color);balloon.classList.add('popped');const rect=balloon.getBoundingClientRect(),burst=document.createElement('div');burst.className='iceBurst';burst.textContent='💥✨';burst.style.left=(rect.left+rect.width/2)+'px';burst.style.top=(rect.top+rect.height/2)+'px';$('iceBreakLayer').appendChild(burst);setTimeout(()=>burst.remove(),450);if(wanted){icePopped++;xp+=10;$('gameStatus').textContent='✅ Warna tepat! +10 poin. Balon target: '+icePopped;}else{xp=Math.max(0,xp-5);$('gameStatus').textContent='❌ Bukan warna target: -5 poin.';}updateHud();setTimeout(()=>balloon.remove(),320);const remain=[...document.querySelectorAll('#iceBreakLayer .iceBalloon:not(.popped)')].filter(b=>(window.iceTargetColors||[]).includes(b.dataset.color));if(!remain.length){selecting=true;stopGameTimer();saveGameResult('icebreak',true);showResult('🎉','ICE BREAKING SELESAI',`Skor ${xp} poin. Balon target yang dipecahkan: ${icePopped}.`,true);}},
  getRoomResults:()=>gameResults,
+ finishNow:()=>finishGame(false),
+ nextQuestion:()=>{if(gameIndex<gameQuestions.length-1){gameIndex++;renderGameQuestion();}else finishGame(false);},
 };
 resizeHandCanvas();
 loadStudentSetup();
@@ -2088,6 +2090,40 @@ setTimeout(ensureTeacherPanel,1200);
 })();
 </script>
 
+<style>
+#studentResultsModal{position:fixed;inset:0;z-index:99999;background:#031226ed;display:none;align-items:center;justify-content:center;padding:14px}
+#studentResultsModal.open{display:flex}#studentResultsCard{background:#fff;color:#123047;border-radius:18px;padding:20px;width:min(850px,98vw);max-height:90vh;overflow:auto}#studentResultsCard table{min-width:550px;color:#123047}#studentResultsCard th{color:#075985}#studentResultsCard td{border-color:#cbd5e1}#studentResultsCard button{margin:5px}
+#studentResultsToolbar{position:fixed;bottom:72px;right:12px;z-index:100;display:none;gap:8px;flex-wrap:wrap}#studentResultsToolbar button{background:#0c4a6e;color:#fff;border:2px solid white}
+#teacherReturnGame{position:fixed;left:12px;bottom:12px;z-index:9999;display:none;background:#facc15;color:#422006;border:2px solid white}
+</style>
+<script>
+(function(){'use strict';
+const $=id=>document.getElementById(id),safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let teacherWatching=false,completedBoat=false;
+const tools=document.createElement('div');tools.id='studentResultsToolbar';tools.innerHTML='<button type="button" id="showStudentResults">📊 Hasil Game Saya & Teman</button><button type="button" id="studentLeaveGame">🚪 Keluar Game</button>';document.body.appendChild(tools);
+const back=document.createElement('button');back.id='teacherReturnGame';back.type='button';back.textContent='↩ Kembali ke Panel Guru';document.body.appendChild(back);
+const modal=document.createElement('div');modal.id='studentResultsModal';modal.innerHTML='<section id="studentResultsCard" role="dialog" aria-modal="true" aria-label="Hasil permainan"><h2>📊 Hasil Game Saya dan Teman</h2><p id="studentResultsInfo">Memuat hasil...</p><div class="tableWrap" id="studentResultsTable"></div><button type="button" id="closeStudentResults" class="danger">Tutup</button></section>';document.body.appendChild(modal);
+function room(){return [ $('studentSchool')?.value||'', $('studentClass')?.value||'', ($('studentCode')?.value||'').trim().toUpperCase()].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum'}
+async function results(){modal.classList.add('open');const info=$('studentResultsInfo'),box=$('studentResultsTable');info.textContent='Memuat data hasil dari Firebase...';box.innerHTML='';let records=[];let error='';const d=window.firebaseDB;
+ if(d){try{const root='pgroRantingDua/liveRooms/'+room();const [a,b]=await Promise.all([d.ref(root+'/results').once('value'),d.ref(root+'/raceRounds').once('value')]);records=Object.values(a.val()||{}).filter(x=>x&&typeof x==='object');const groups={};Object.entries(b.val()||{}).forEach(([index,round])=>Object.values(round?.answers||{}).forEach(a=>{const key=(a.accountKey||a.name||'Siswa').toLowerCase();const g=groups[key]??={student:a.name||'Siswa',type:'Perahu',score:0,answers:[],createdAt:''};g.score+=Number(a.points)||0;g.answers.push(a);g.createdAt=a.at?new Date(a.at).toISOString():g.createdAt}));records.push(...Object.values(groups));}catch(e){error='Firebase tidak dapat dibaca: '+(e.message||e)}}else error='Firebase belum tersambung.';
+ if(!records.length){try{records=JSON.parse(localStorage.getItem('balon_game_results_v1')||'[]')}catch(e){}}
+ const current=($('studentName')?.value||'').trim().toLowerCase();records=records.filter(x=>x&&(!x.school||String(x.school).trim().toLowerCase()===String($('studentSchool')?.value||'').trim().toLowerCase())).sort((a,b)=>Number(String(b.student||b.name||'').toLowerCase()===current)-Number(String(a.student||a.name||'').toLowerCase()===current)||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+ info.textContent=(error?error+' ':'')+'Hasil yang tersedia di ruang kelas ini. Nilai teman hanya tampil bila datanya sudah tersimpan dan izin Firebase mengizinkan.';
+ box.innerHTML=records.length?'<table><thead><tr><th>Siswa</th><th>Game</th><th>Nilai / Poin</th><th>Benar</th><th>Waktu</th></tr></thead><tbody>'+records.map(r=>'<tr><td>'+safe(r.student||r.name||'Siswa')+(String(r.student||r.name||'').toLowerCase()===current?' (Saya)':'')+'</td><td>'+safe(r.type||'Game')+'</td><td>'+safe(r.score??0)+'</td><td>'+safe(Array.isArray(r.answers)?r.answers.filter(a=>a.isCorrect===true||a.correct===true).length+' / '+r.answers.length:'—')+'</td><td>'+safe(r.createdAt||'—')+'</td></tr>').join('')+'</tbody></table>':'<p>Belum ada hasil permainan yang tersimpan di ruang ini.</p>';
+}
+function leave(){modal.classList.remove('open');completedBoat=false;if(teacherWatching){back.click();return;}if(typeof window.exitGame==='function')window.exitGame();}
+$('showStudentResults').onclick=results;$('studentLeaveGame').onclick=leave;$('closeStudentResults').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
+back.onclick=()=>{teacherWatching=false;modal.classList.remove('open');try{window.exitGame?.()}catch(e){}document.querySelectorAll('.screen').forEach(x=>x.classList.add('hidden'));$('teacherScreen')?.classList.remove('hidden');back.style.display='none';try{window.loadTeacher?.()}catch(e){}};
+// Guru dapat keluar dari ruang game/pemantauan tanpa keluar dari akun guru.
+function addTeacherReturn(){const panel=$('teacherLivePanel');if(panel&&!$('teacherBackPanel')){const b=document.createElement('button');b.id='teacherBackPanel';b.type='button';b.className='ghost';b.textContent='↩ Kembali ke Panel Guru';b.onclick=()=>{teacherWatching=false;back.click();};panel.querySelector('.actions')?.appendChild(b);}}
+document.addEventListener('click',e=>{const el=e.target.closest('button');if(!el)return;if(el.id==='teacherJoinLive'){teacherWatching=true;setTimeout(addTeacherReturn,100)}if(el.id==='resultExitBtn'&&teacherWatching){e.preventDefault();e.stopImmediatePropagation();back.click();}},true);
+let lastGame=false;
+setInterval(()=>{const playing=!$('game')?.classList.contains('hidden');tools.style.display=playing&&!teacherWatching?'flex':'none';back.style.display=playing&&teacherWatching?'block':'none';addTeacherReturn();if(playing&&!lastGame)completedBoat=false;lastGame=playing;
+ // Game perahu otomatis selesai ketika jumlah jawaban mencapai jumlah soal.
+ if(playing&&!completedBoat){const st=window.__gameApi?.getState?.(),q=window.__gameApi?.getQuestion?.();const logs=(window.__studentAnswerLog||[]).filter(a=>a.type==='boat-race');if(q?.type==='isian'&&st?.gameQuestions?.length&&logs.length>=st.gameQuestions.length){completedBoat=true;window.__gameApi?.finishNow?.();}}
+},500);
+})();
+</script>
 </body>
 </html>
 
@@ -2231,6 +2267,8 @@ async function submitRaceAnswer(idx,fromTimer=false){
  window.__studentAnswerLog=window.__studentAnswerLog||[];window.__studentAnswerLog.push({question:q.q||q.question||'',type:'boat-race',selected:(q.a||[])[finalIdx]||'',selectedLetter:'ABCD'[finalIdx]||'',correctAnswer:(q.a||[])[q.correct]||'',isCorrect:correct,team,points:pts,at:new Date().toISOString()});
  if(correct){try{window.xp=(window.xp||0)+20}catch(e){}}
  if(d&&room){const accountKey=studentResultKey();const ref=d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers/'+accountKey);try{await ref.set({accountKey,name:person,team,answer:finalIdx,selected:(q.a||[])[finalIdx]||'',question:q.q||q.question||'',correctAnswer:(q.a||[])[q.correct]||'',correct,points:pts,at:Date.now()});const all=(await d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers').once('value')).val()||{};let a=0,b=0;Object.values(all).forEach(x=>{if(x.correct){if(x.team==='A')a+=Number(x.points)||20;else if(x.team==='B')b+=Number(x.points)||20}});if($('raceScoreA'))$('raceScoreA').textContent=a;if($('raceScoreB'))$('raceScoreB').textContent=b;if($('raceProgressA'))$('raceProgressA').style.width=Math.min(100,a)+'%';if($('raceProgressB'))$('raceProgressB').style.width=Math.min(100,b)+'%';d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/teamScores').set({A:a,B:b}).catch(()=>{});}catch(e){$('boatRaceStatus').textContent+=' Skor online belum tersimpan; periksa izin Firebase.'}}
+ // Setelah jawaban final tersimpan, lanjutkan soal tanpa menunggu timer permainan keseluruhan.
+ setTimeout(()=>{if(!$('game')?.classList.contains('hidden') && $('gameMessage')?.style.display!=='flex' && getQ()===q){window.__gameApi?.nextQuestion();}},1400);
 }
 document.addEventListener('click',e=>{const view=e.target.closest('#boatRaceViewResults');if(view){e.preventDefault();showMyBoatResults();return;}const pick=e.target.closest('[data-race-team]');if(pick){e.preventDefault();selectRaceTeam(pick.dataset.raceTeam);return;}const boat=e.target.closest('[data-race-answer]');if(boat){e.preventDefault();chooseRaceAnswer(Number(boat.dataset.raceAnswer))}},true);
 const oldStart=window.startStudentGame;
