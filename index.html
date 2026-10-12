@@ -543,6 +543,8 @@ body{overscroll-behavior:none}
 #handPointer .handPointerLabel{font-size:10px;left:-37px;top:15px}
 body:has(#woodRiver) #handPointer .handPointerIcon{display:none!important}
 body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
+
+#gameQuestion img{border-radius:10px;background:#fff;padding:3px}.answerBalloon .basket{flex-direction:column;gap:3px;overflow-wrap:anywhere}.iceBalloon{pointer-events:auto!important;cursor:pointer}.iceFuseTimer{font-variant-numeric:tabular-nums}
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
@@ -707,12 +709,12 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
     <div class="notice" style="margin:0;align-self:end">⏱️ Waktu berlaku untuk seluruh soal dengan kode yang sama. Timer siswa akan berjalan mundur.</div>
    </div>
    <div class="formGrid"><div><label>Bentuk Soal</label><select id="qType" onchange="updateQuestionTypeUI()"><option value="pg">Pilihan ganda — Balon Udara</option><option value="isian">Isian — Game Memukul Kayu</option><option value="icebreak">Ice Breaking — Pecahkan Balon Warna</option></select></div></div>
-    <div id="questionTextField"><label>Pertanyaan</label><input id="qText" placeholder="Tuliskan pertanyaan"></div>
+    <div id="questionTextField"><label>Pertanyaan</label><input id="qText" placeholder="Tuliskan pertanyaan"><label>Gambar Pertanyaan (opsional)</label><input type="file" id="qImage" accept="image/*"><img id="qImagePreview" style="display:none;max-width:210px;max-height:150px;margin:8px"><button type="button" class="ghost" onclick="clearQuestionImage()">Hapus Gambar Pertanyaan</button></div>
     <div id="qShortAnswerFields" class="hidden"><label>Kunci Jawaban Isian / Essay</label><input id="qExpected" placeholder="Jawaban acuan untuk diperiksa otomatis"></div>
     <div id="qPoseWrongField" class="hidden"><label>Gerakan jika jawaban salah (khusus meloncat)</label><input id="qPoseWrong" placeholder="Contoh: pose wajah bingung"></div>
    <div id="qChoiceFields"><label>Pilihan Jawaban (digunakan untuk semua mode)</label><div class="formGrid">
-    <div><label>Jawaban A</label><input id="qa"></div><div><label>Jawaban B</label><input id="qb"></div>
-    <div><label>Jawaban C</label><input id="qc"></div><div><label>Jawaban D</label><input id="qd"></div>
+    <div><label>Jawaban A</label><input id="qa"><input type="file" id="qaImage" accept="image/*" aria-label="Gambar jawaban A"><img id="qaPreview" style="display:none;max-width:120px;max-height:100px"></div><div><label>Jawaban B</label><input id="qb"><input type="file" id="qbImage" accept="image/*" aria-label="Gambar jawaban B"><img id="qbPreview" style="display:none;max-width:120px;max-height:100px"></div>
+    <div><label>Jawaban C</label><input id="qc"><input type="file" id="qcImage" accept="image/*" aria-label="Gambar jawaban C"><img id="qcPreview" style="display:none;max-width:120px;max-height:100px"></div><div><label>Jawaban D</label><input id="qd"><input type="file" id="qdImage" accept="image/*" aria-label="Gambar jawaban D"><img id="qdPreview" style="display:none;max-width:120px;max-height:100px"></div>
    </div></div>
    <div id="correctAnswerField"><label>Jawaban Benar</label>
    <select id="qCorrect"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>
@@ -987,9 +989,9 @@ window.doLogin=()=>{
   if(u===admin.username&&p===admin.password){$('loginModal').classList.add('hidden');loadAdmin();show('adminScreen')}
   else alert('Username atau password admin salah.');
  }else{
-  const t=teachers.find(x=>x.username===u&&x.password===p);
+  const t=teachers.find(x=>String(x.username||'').trim().toLowerCase()===u.toLowerCase()&&String(x.password||'')===p);
   if(!t){alert('Username atau password guru salah.');return}
-  currentTeacher=t;$('loginModal').classList.add('hidden');loadTeacher();show('teacherScreen');
+  currentTeacher=t;$('loginModal').classList.add('hidden');try{loadTeacher();show('teacherScreen')}catch(err){console.error(err);show('teacherScreen');alert('Panel guru dibuka, tetapi ada komponen yang gagal dimuat: '+err.message)}
  }
 };
 
@@ -1125,6 +1127,12 @@ window.uploadTeachers=input=>{
  });
 };
 
+
+async function imageData(id,previous){const f=$(id)?.files?.[0];if(!f)return previous||'';if(!f.type.startsWith('image/'))throw new Error('File harus berupa gambar');if(f.size>1500000)throw new Error('Gambar maksimal 1,5 MB');return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f)})}
+function showImagePreviews(images){const ids=[['qImagePreview',images?.question],...'abcd'.split('').map((a,i)=>['q'+a+'Preview',images?.answers?.[i]])];ids.forEach(([id,src])=>{const el=$(id);if(el){el.src=src||'';el.style.display=src?'block':'none'}})}
+window.clearQuestionImage=()=>{if($('qImage'))$('qImage').value='';const el=$('qImagePreview');if(el){el.src='';el.style.display='none'};window.__clearQuestionImage=true};
+['qImage',...'abcd'.split('').map(a=>'q'+a+'Image')].forEach((id)=>document.getElementById(id)?.addEventListener('change',async()=>{const preview=$(id==='qImage'?'qImagePreview':id.replace('Image','Preview'));if(preview){try{preview.src=await imageData(id,'');preview.style.display='block'}catch(e){alert(e.message)}}}));
+
 function loadTeacher(){
  $('teacherTitle').textContent=`👨‍🏫 ${currentTeacher.name} • ${currentTeacher.school} • ${currentTeacher.className}`;
  clearQuestion();
@@ -1133,11 +1141,11 @@ function loadTeacher(){
 window.updateQuestionTypeUI=()=>{
  const t=$('qType').value,ice=t==='icebreak';
  $('qChoiceFields').classList.toggle('hidden',ice);$('correctAnswerField').classList.toggle('hidden',ice);
- $('questionTextField').classList.toggle('hidden',ice);$('qShortAnswerFields').classList.toggle('hidden',t==='pg'||ice);$('qPoseWrongField').classList.add('hidden');$('qPoseCorrect').parentElement?.classList.toggle('hidden',ice);$('qPoseCorrect').parentElement?.classList.add('hidden');
+ $('questionTextField').classList.toggle('hidden',ice);$('qShortAnswerFields').classList.toggle('hidden',t==='pg'||ice);$('qPoseWrongField').classList.add('hidden');
  ['qa','qb','qc','qd'].forEach(id=>$(id).required=!ice);$('qText').required=!ice;
  $('qSubject').placeholder=ice?'Nama kegiatan, mis. Ice Breaking Ceria':'Matematika';
 };
-window.saveQuestion=()=>{
+window.saveQuestion=async()=>{
  const id=$('qId').value,duration=Math.max(1,Math.min(180,Number($('qDuration').value)||5)),type=$('qType').value||'pg';
  const code=$('qCode').value.trim().toUpperCase();
  if(!code)return alert('Kode wajib diisi.');
@@ -1146,19 +1154,20 @@ window.saveQuestion=()=>{
   if(id)icebreakings=icebreakings.map(x=>x.id===id?obj:x);else icebreakings.push(obj);
   set(K.icebreakings,icebreakings);renderQuestions();clearQuestion();alert('Ice breaking berhasil disimpan. Siswa cukup memasukkan kode ini; tidak perlu soal.');return;
  }
- const obj={id:id||uid(),teacherId:currentTeacher.id,school:currentTeacher.school,className:currentTeacher.className,subject:$('qSubject').value.trim(),code,duration,q:$('qText').value.trim(),type,expected:$('qExpected').value.trim(),poseCorrect:$('qPoseCorrect').value.trim(),poseWrong:$('qPoseWrong').value.trim(),a:[$('qa').value.trim(),$('qb').value.trim(),$('qc').value.trim(),$('qd').value.trim()],correct:Number($('qCorrect').value)};
+ const oldQuestion=questions.find(x=>x.id===id);const images={question:window.__clearQuestionImage?'':await imageData('qImage',oldQuestion?.images?.question),answers:await Promise.all('abcd'.split('').map(a=>imageData('q'+a+'Image',oldQuestion?.images?.answers?.['abcd'.indexOf(a)])))};
+ const obj={id:id||uid(),images,teacherId:currentTeacher.id,school:currentTeacher.school,className:currentTeacher.className,subject:$('qSubject').value.trim(),code,duration,q:$('qText').value.trim(),type,expected:$('qExpected').value.trim(),poseWrong:$('qPoseWrong').value.trim(),a:[$('qa').value.trim(),$('qb').value.trim(),$('qc').value.trim(),$('qd').value.trim()],correct:Number($('qCorrect').value)};
  if(!obj.subject||!obj.q)return alert('Mapel dan pertanyaan wajib diisi.');
  if(obj.a.some(x=>!x))return alert('Semua pilihan jawaban A-D wajib diisi.');
  if(id)questions=questions.map(q=>q.id===id?obj:q);else questions.push(obj);
- set(K.questions,questions);renderQuestions();clearQuestion();alert('Soal berhasil disimpan.');
+ set(K.questions,questions);window.__clearQuestionImage=false;renderQuestions();clearQuestion();alert('Soal berhasil disimpan.');
 };
 window.renderQuestions=()=>{
  const mine=[...questions.filter(q=>q.teacherId===currentTeacher.id),...icebreakings.filter(q=>q.teacherId===currentTeacher.id).map(q=>({...q,q:'🎈 Ice Breaking: pecahkan warna sesuai petunjuk',isIce:true}))];
  $('questionTable').innerHTML=mine.length?mine.map((q,i)=>`<tr><td>${i+1}</td><td>${esc(q.subject)}</td><td><span class="badge">${esc(q.code)}</span></td><td>${esc(q.q)}</td><td>${q.isIce?'Respon kedua tangan':esc(q.type==='pg'?(q.a||[])[q.correct]:(q.expected||''))}</td><td class="rowBtns"><button class="ghost" onclick="editQuestion('${q.id}')">Edit</button><button class="danger" onclick="deleteQuestion('${q.id}')">Hapus</button></td></tr>`).join(''):`<tr><td colspan="6" class="empty">Belum ada soal. Tambahkan soal pertama.</td></tr>`;
 };
-window.editQuestion=id=>{const ice=icebreakings.find(x=>x.id===id);if(ice){$('qId').value=ice.id;$('qType').value='icebreak';$('qSubject').value=ice.subject;$('qCode').value=ice.code;$('qDuration').value=ice.duration||5;updateQuestionTypeUI();window.scrollTo({top:0,behavior:'smooth'});return;}const q=questions.find(x=>x.id===id);if(!q)return;$('qId').value=q.id;$('qType').value=q.type||'pg';$('qExpected').value=q.expected||'';$('qPoseCorrect').value=q.poseCorrect||'';$('qPoseWrong').value=q.poseWrong||'';updateQuestionTypeUI();$('qSubject').value=q.subject;$('qCode').value=q.code;$('qDuration').value=q.duration||10;$('qText').value=q.q;['qa','qb','qc','qd'].forEach((id,i)=>$(id).value=q.a[i]);$('qCorrect').value=q.correct;window.scrollTo({top:0,behavior:'smooth'})};
+window.editQuestion=id=>{const ice=icebreakings.find(x=>x.id===id);if(ice){$('qId').value=ice.id;$('qType').value='icebreak';$('qSubject').value=ice.subject;$('qCode').value=ice.code;$('qDuration').value=ice.duration||5;updateQuestionTypeUI();window.scrollTo({top:0,behavior:'smooth'});return;}const q=questions.find(x=>x.id===id);if(!q)return;$('qId').value=q.id;$('qType').value=q.type||'pg';$('qExpected').value=q.expected||'';$('qPoseWrong').value=q.poseWrong||'';updateQuestionTypeUI();$('qSubject').value=q.subject;$('qCode').value=q.code;$('qDuration').value=q.duration||10;$('qText').value=q.q;showImagePreviews(q.images);['qa','qb','qc','qd'].forEach((id,i)=>$(id).value=q.a[i]);$('qCorrect').value=q.correct;window.scrollTo({top:0,behavior:'smooth'})};
 window.deleteQuestion=id=>{if(!confirm('Hapus soal/ice breaking ini?'))return;questions=questions.filter(q=>q.id!==id);icebreakings=icebreakings.filter(q=>q.id!==id);set(K.questions,questions);set(K.icebreakings,icebreakings);renderQuestions()};
-window.clearQuestion=()=>{['qId','qSubject','qCode','qText','qa','qb','qc','qd','qExpected','qPoseCorrect','qPoseWrong'].forEach(id=>$(id).value='');$('qType').value='pg';$('qCorrect').value='0';$('qDuration').value=10;updateQuestionTypeUI()};
+window.clearQuestion=()=>{['qId','qSubject','qCode','qText','qa','qb','qc','qd','qExpected','qPoseWrong'].forEach(id=>$(id).value='');$('qType').value='pg';$('qCorrect').value='0';$('qDuration').value=10;['qImage',...'abcd'.split('').map(a=>'q'+a+'Image')].forEach(id=>{if($(id))$(id).value=''});showImagePreviews(null);updateQuestionTypeUI()};
 
 let allStudentSchools=[];
 function loadStudentSetup(){
@@ -1195,7 +1204,7 @@ window.startStudentGame=()=>{
 
 function renderGameQuestion(){
  if(clapQuestionTimer){clearInterval(clapQuestionTimer);clapQuestionTimer=null;}clapSecondsLeft=10;
- const q=gameQuestions[gameIndex];$('gameQuestion').textContent=q.q;$('round').textContent=gameIndex+1;$('totalQ').textContent=gameQuestions.length;
+ const q=gameQuestions[gameIndex];$('gameQuestion').innerHTML=esc(q.q)+(q.images?.question?'<div><img src="'+q.images.question+'" style="max-height:115px;max-width:95%;object-fit:contain"></div>':'');$('round').textContent=gameIndex+1;$('totalQ').textContent=gameQuestions.length;
  $('playfield').innerHTML='';const walker=$('walkingStudent');if(walker){walker.classList.remove('active');walker.style.left='50%';}hover=null;selecting=false;$('dwell').style.display='none';$('progressCircle').style.strokeDashoffset='213';
  const panel=$('writtenAnswerPanel');panel.classList.add('hidden');$('studentWrittenAnswer').classList.add('hidden');$('studentWrittenAnswer').value='';$('studentWrittenAnswer').disabled=false;$('clapSubmitBtn').disabled=false;$('clapStage').textContent='';$('poseInstruction').textContent='';$('poseChoices').textContent='';$('bodyPoseStatus').textContent='Kamera tubuh belum aktif';window.poseExpected='';window.poseResultPending=null;window.jumpBaseline=null;window.lastJumpAt=0;window.lastHandsTogether=false;window.lastClapMotion=0;window.clapReady=true;window.clapPosePrevDist=null;window.jumpPoseState=null;clapCount=0;
  if(q.type==='icebreak'){
@@ -1220,13 +1229,13 @@ function renderGameQuestion(){
   if(!essay){
    const nums=[1,2,3,4].sort(()=>Math.random()-.5);window.clapChoiceMap={};
    (q.a||[]).forEach((a,i)=>window.clapChoiceMap[nums[i]]=i);
-   $('poseChoices').innerHTML=`<div id="woodRiver"><div class="woodWater"></div><div class="teamRace"><div class="teamBoat" id="boatA"><b>🚣 TIM A</b><span id="teamAScore">0 poin</span><div class="boatHull">⛵</div></div><div class="teamBoat" id="boatB"><b>🚣 TIM B</b><span id="teamBScore">0 poin</span><div class="boatHull">⛵</div></div></div><div class="teamPicker"><button type="button" class="teamPick active" data-team="A">Pilih TIM A</button><button type="button" class="teamPick" data-team="B">Pilih TIM B</button></div><div id="woodStream">${(q.a||[]).map((a,i)=>`<button type="button" class="floatingLog" data-hits="${nums[i]}" data-answer="${i}"><b>PILIHAN ${'ABCD'[i]}</b><span>${esc(a)}</span></button>`).join('')}</div><div id="woodTarget" role="button" tabindex="0" aria-label="Pukul kayu untuk memilih jawaban">🪵<small>PUKUL / SENTUH KAYU</small></div><div id="woodRaceStatus">Pilih TIM A atau TIM B, lalu pilih jawaban. Kedua tim berlomba mendapatkan poin.</div></div>`;
+   $('poseChoices').innerHTML=`<div id="woodRiver"><div class="woodWater"></div><div class="teamRace"><div class="teamBoat" id="boatA"><b>🚣 TIM A</b><span id="teamAScore">0 poin</span><div class="boatHull">⛵</div></div><div class="teamBoat" id="boatB"><b>🚣 TIM B</b><span id="teamBScore">0 poin</span><div class="boatHull">⛵</div></div></div><div class="teamPicker"><button type="button" class="teamPick active" data-team="A">Pilih TIM A</button><button type="button" class="teamPick" data-team="B">Pilih TIM B</button></div><div id="woodStream">${(q.a||[]).map((a,i)=>`<button type="button" class="floatingLog" data-hits="${nums[i]}" data-answer="${i}"><b>PILIHAN ${'ABCD'[i]}</b><span>${esc(a)}${q.images?.answers?.[i]?'<img src="'+q.images.answers[i]+'" style="max-width:90px;max-height:65px;display:block;margin:auto">':''}</span></button>`).join('')}</div><div id="woodTarget" role="button" tabindex="0" aria-label="Pukul kayu untuk memilih jawaban">🪵<small>PUKUL / SENTUH KAYU</small></div><div id="woodRaceStatus">Pilih TIM A atau TIM B, lalu pilih jawaban. Kedua tim berlomba mendapatkan poin.</div></div>`;
    clapCount=0;window.woodArmed=true;window.woodLastHit=0;window.woodPrevY=null;
    $('clapStage').textContent='⏱️ 20 detik • 🪵 Pilih jawaban tim sebelum waktu habis';
    $('poseInstruction').textContent='Gerakkan tangan turun ke kayu tengah. Ulangi untuk mengubah pilihan sebelum 20 detik habis.';
   } else {
    const shuffled=[0,1,2,3].sort(()=>Math.random()-.5);window.jumpChoiceMap={};shuffled.forEach((idx,zone)=>window.jumpChoiceMap[zone]=idx);
-   $('poseChoices').innerHTML=`<div class="jumpChoiceGrid">${shuffled.map((idx,zone)=>`<div class="jumpChoice" data-zone="${zone}" style="padding:12px;border-radius:12px;background:#164e63;border:2px solid #67e8f9"><b>➡️ Zona ${zone+1} • Pilihan ${'ABCD'[idx]}</b><div>${esc((q.a||[])[idx]||'')}</div></div>`).join('')}</div>`;
+   $('poseChoices').innerHTML=`<div class="jumpChoiceGrid">${shuffled.map((idx,zone)=>`<div class="jumpChoice" data-zone="${zone}" style="padding:12px;border-radius:12px;background:#164e63;border:2px solid #67e8f9"><b>➡️ Zona ${zone+1} • Pilihan ${'ABCD'[idx]}</b><div>${esc((q.a||[])[idx]||'')}${q.images?.answers?.[idx]?'<img src="'+q.images.answers[idx]+'" style="max-width:95px;max-height:75px;display:block;margin:auto">':''}</div></div>`).join('')}</div>`;
    $('clapStage').textContent='🚶 PINDAH POSISI KE ZONA JAWABAN';$('poseInstruction').textContent='Geser tubuh ke kiri atau kanan hingga kamera mendeteksi zona jawaban yang dipilih. Tidak perlu meloncat.';
   }
   $('bodyPoseStatus').textContent='📷 Tekan MULAI lalu tunjukkan dua jari agar kamera mulai membaca gerakan.';
@@ -1237,7 +1246,7 @@ function renderGameQuestion(){
  const pos=[{x:5,y:8},{x:29,y:28},{x:55,y:7},{x:77,y:27}];
  const palettes=[['#ff4f63','#ffd27f','#d82e48'],['#28b9ff','#a6f2ff','#0872b5'],['#ff9f2f','#ffe29a','#db5a08'],['#8d68ff','#d8caff','#5632c9'],['#21c98b','#b8f6d8','#087e59'],['#ef5ac8','#ffc7ef','#9e2484']];
  const shuffled=[...palettes].sort(()=>Math.random()-.5);
- (q.a||[]).forEach((txt,i)=>{const b=document.createElement('div');b.className='answerBalloon';b.style.left=pos[i].x+'%';b.style.top=pos[i].y+'%';b.dataset.index=i;const pal=shuffled[i%shuffled.length];b.style.setProperty('--balloon-main',pal[0]);b.style.setProperty('--balloon-light',pal[1]);b.style.setProperty('--balloon-dark',pal[2]);b.innerHTML=`<div class="envelope"></div><div class="rope"></div><div class="basket">${esc(txt)}</div>`;$('playfield').appendChild(b)});
+ (q.a||[]).forEach((txt,i)=>{const b=document.createElement('div');b.className='answerBalloon';b.style.left=pos[i].x+'%';b.style.top=pos[i].y+'%';b.dataset.index=i;const pal=shuffled[i%shuffled.length];b.style.setProperty('--balloon-main',pal[0]);b.style.setProperty('--balloon-light',pal[1]);b.style.setProperty('--balloon-dark',pal[2]);b.innerHTML=`<div class="envelope"></div><div class="rope"></div><div class="basket">${esc(txt)}${q.images?.answers?.[i]?'<img src="'+q.images.answers[i]+'" style="max-width:70px;max-height:65px;object-fit:contain;display:block">':''}</div>`;$('playfield').appendChild(b)});
  handDetected=false;
  if(gameHasStarted){handLocked=false;hideHandGate();startCamera();}else{showHandGate();handLocked=true;$('handGateStatus').textContent='Tekan MULAI, izinkan kamera, lalu tunjukkan tepat dua jari. Hitung mundur berlangsung 10 detik.';}
 }
@@ -2246,11 +2255,11 @@ const boatObserver=new MutationObserver(ensureStudentResultButton);boatObserver.
 const balloonTimers=new WeakMap();let balloonObserver;
 function iceIsRunning(){const q=window.gameQuestions?.[window.gameIndex];return !!document.querySelector('#iceBreakLayer')&&!!q&&q.type==='icebreak'&&$('game')&&!$('game').classList.contains('hidden')&&$('gameMessage')?.style.display!=='flex';}
 function chooseColor(){const colors=[...document.querySelectorAll('#iceBreakLayer .iceBalloon')].map(b=>b.dataset.color).filter(Boolean);const targets=window.iceTargetColors||[];const all=[...new Set([...colors,...targets,'merah','biru','kuning','hijau','ungu','oranye'])];return all[Math.floor(Math.random()*all.length)]||'biru';}
-function spawnReplacement(old){if(!iceIsRunning())return;const layer=$('iceBreakLayer');if(!layer)return;const clone=old.cloneNode(true);clone.classList.remove('popped','hidden','iceSelfBurst');delete clone.dataset.fuseArmed;clone.dataset.respawned='1';clone.style.opacity='';clone.style.pointerEvents='';clone.style.left=(3+Math.random()*88)+'%';clone.style.top=(22+Math.random()*68)+'%';clone.dataset.color=chooseColor();const name=clone.dataset.color;const colors={merah:['#ef4444','#fca5a5'],biru:['#2563eb','#93c5fd'],kuning:['#eab308','#fef08a'],hijau:['#16a34a','#86efac'],ungu:['#9333ea','#d8b4fe'],oranye:['#f97316','#fdba74']};const c=colors[name]||colors.biru;clone.style.background=`radial-gradient(circle at 30% 24%,#ffffffb8 0 7%,transparent 24%),linear-gradient(135deg,${c[0]},${c[1]})`;const oldLabel=clone.querySelector('span:not(.iceFuseTimer)');if(oldLabel)oldLabel.textContent=name;layer.appendChild(clone);armBalloon(clone);}
+function spawnReplacement(old){if(!iceIsRunning())return;const layer=$('iceBreakLayer');if(!layer)return;const clone=old.cloneNode(true);clone.querySelector('.iceFuseTimer')?.remove();clone.classList.remove('popped','hidden','iceSelfBurst');delete clone.dataset.fuseArmed;clone.dataset.respawned='1';clone.style.opacity='';clone.style.pointerEvents='';clone.style.left=(3+Math.random()*88)+'%';clone.style.top=(22+Math.random()*68)+'%';clone.dataset.color=chooseColor();const name=clone.dataset.color;const colors={merah:['#ef4444','#fca5a5'],biru:['#2563eb','#93c5fd'],kuning:['#eab308','#fef08a'],hijau:['#16a34a','#86efac'],ungu:['#9333ea','#d8b4fe'],oranye:['#f97316','#fdba74']};const c=colors[name]||colors.biru;clone.style.background=`radial-gradient(circle at 30% 24%,#ffffffb8 0 7%,transparent 24%),linear-gradient(135deg,${c[0]},${c[1]})`;const oldLabel=clone.querySelector('span:not(.iceFuseTimer)');if(oldLabel)oldLabel.textContent=name;layer.appendChild(clone);armBalloon(clone);}
 function armBalloon(balloon){if(balloon.dataset.fuseArmed==='1'||balloon.classList.contains('popped'))return;balloon.dataset.fuseArmed='1';let timer=balloon.querySelector('.iceFuseTimer');if(!timer){timer=document.createElement('span');timer.className='iceFuseTimer';balloon.appendChild(timer);}let left=5;timer.textContent=left;const interval=setInterval(()=>{if(!balloon.isConnected||balloon.classList.contains('popped')||!iceIsRunning()){clearInterval(interval);return;}left--;timer.textContent=Math.max(0,left);if(left<=0){clearInterval(interval);balloon.classList.add('iceSelfBurst');balloon.style.pointerEvents='none';const old=balloon;setTimeout(()=>{old.remove();spawnReplacement(old);},360);}},1000);balloonTimers.set(balloon,interval);}
 function watchBalloons(){const layer=$('iceBreakLayer');if(!layer)return;if(balloonObserver)balloonObserver.disconnect();[...layer.querySelectorAll('.iceBalloon')].forEach(armBalloon);balloonObserver=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){if(n.matches?.('.iceBalloon'))armBalloon(n);n.querySelectorAll?.('.iceBalloon').forEach(armBalloon)}})));balloonObserver.observe(layer,{childList:true,subtree:true});}
-document.addEventListener('click',e=>{const b=e.target.closest('#iceBreakLayer .iceBalloon');if(!b)return;setTimeout(()=>{if(!iceIsRunning()||b.dataset.respawned==='1'||b.dataset.respawnScheduled==='1')return;if(!b.isConnected||b.classList.contains('popped')){b.dataset.respawnScheduled='1';spawnReplacement(b);}},500);},true);
-const iceWatch=new MutationObserver(()=>{if(iceIsRunning())watchBalloons();});iceWatch.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});setInterval(()=>{if(iceIsRunning())watchBalloons();},1500);
+document.addEventListener('click',e=>{const b=e.target.closest('#iceBreakLayer .iceBalloon');if(!b)return;setTimeout(()=>{if(!iceIsRunning()||b.dataset.respawnScheduled==='1')return;if(!b.isConnected||b.classList.contains('popped')){b.dataset.respawnScheduled='1';b.remove();spawnReplacement(b);}},500);},true);
+const iceWatch=new MutationObserver(()=>{if(iceIsRunning())watchBalloons();});iceWatch.observe($('iceBreakLayer'),{childList:true});setInterval(()=>{if(iceIsRunning())watchBalloons();},1500);
 // Tambahkan hasil rinci Game Perahu pada panel guru setelah panel ruang dibuat.
 async function addTeacherRaceDetails(){const box=$('teacherLiveResults'),d=window.firebaseDB;if(!box||!d||!$('teacherLiveCode'))return;if(box.dataset.raceDetails==='1')return;box.dataset.raceDetails='1';const key=[($('teacherLiveSchool')?.value||'').trim(),($('teacherLiveClass')?.value||'').trim(),($('teacherLiveCode')?.value||'').trim().toUpperCase()].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';try{const snap=await d.ref('pgroRantingDua/liveRooms/'+key+'/raceRounds').once('value');const rounds=snap.val()||{};const entries=[];Object.entries(rounds).forEach(([r,data])=>Object.values(data?.answers||{}).forEach(a=>entries.push({...a,round:Number(r)+1})));let detail=document.getElementById('teacherRaceDetailResults');if(!detail){detail=document.createElement('div');detail.id='teacherRaceDetailResults';box.appendChild(detail);}detail.innerHTML='<h3>🛶 Rincian Jawaban Game Perahu ('+entries.length+')</h3>'+(entries.length?entries.sort((a,b)=>(a.round||0)-(b.round||0)).map(a=>'<div style="padding:8px;border-bottom:1px solid #cbd5e1"><b>'+escSafe(a.name||'Siswa')+'</b> · Soal '+a.round+' · TIM '+escSafe(a.team||'—')+'<br>'+escSafe(a.question||'')+'<br>Jawaban: '+escSafe(a.selected||'—')+' · '+(a.correct?'✅ Benar':'❌ Salah')+' · '+escSafe(a.points||0)+' poin</div>').join(''):'<p>Belum ada jawaban Game Perahu di ruang ini.</p>');}catch(e){box.dataset.raceDetails='';}}
 const teacherWatch=new MutationObserver(()=>{if($('teacherLiveResults')&&$('teacherJoinLive'))addTeacherRaceDetails()});teacherWatch.observe(document.body,{childList:true,subtree:true});setInterval(()=>{if($('teacherLiveResults')&&$('teacherJoinLive')&&!$('teacherScreen')?.classList.contains('hidden')){const d=$('teacherLiveResults');if(d)d.dataset.raceDetails='';addTeacherRaceDetails();}},5000);
