@@ -1296,10 +1296,11 @@ function startGameTimer(){
  // Game Perahu: hitung mundur menggunakan waktu nyata, tidak bergantung pada timer pilihan 20 detik.
  const isBoat=gameQuestions.some(q=>q.type==='isian');
  const totalSeconds=Math.max(60,Math.round(Number(gameDurationMinutes||10)*60));
- if(isBoat){gameTimeLeft=totalSeconds;window.__boatTotalSeconds=totalSeconds;window.__boatDeadline=Date.now()+totalSeconds*1000;updateTimerDisplay();}
+ if(isBoat){window.__boatTotalSeconds=totalSeconds;if(!window.__boatTimerUnlocked){gameTimeLeft=totalSeconds;window.__boatDeadline=0;}else if(!window.__boatDeadline){window.__boatDeadline=Date.now()+totalSeconds*1000;}updateTimerDisplay();}
  gameTimer=setInterval(()=>{
   if($('gameMessage').style.display==='flex')return;
   if(isBoat){
+   if(!window.__boatTimerUnlocked || !window.__boatDeadline){gameTimeLeft=totalSeconds;updateTimerDisplay();return;}
    gameTimeLeft=Math.max(0,Math.ceil((window.__boatDeadline-Date.now())/1000));
   }else{
    if(!handDetected&&(gameQuestions[gameIndex]?.type||'pg')==='pg')return;
@@ -1949,9 +1950,11 @@ updateQuestionTypeUI();
 'use strict';
 const $id=id=>document.getElementById(id);
 let onlineRoom=null,onlineListeners=[],onlineRole='student',onlineUser='',onlineChatReady=false;
+let presenceHeartbeat=null,activePresenceRef=null;
+const PRESENCE_TTL=45000;
 function roomKey(){const raw=(onlineRole==='teacher'?[window.__onlineSchool||'',window.__onlineClass||'',window.__onlineCode||'']:[$id('studentSchool')?.value||'', $id('studentClass')?.value||'', $id('studentCode')?.value||'']).join('|').toLowerCase();return raw.replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';}
 function db(){return window.firebaseDB||null}
-function stopOnline(){const d=db();if(d&&onlineRoom)onlineListeners.forEach(([path,fn])=>d.ref(path).off('value',fn));onlineListeners=[];onlineChatReady=false}
+function stopOnline(){const d=db();if(presenceHeartbeat){clearInterval(presenceHeartbeat);presenceHeartbeat=null}if(activePresenceRef){activePresenceRef.remove().catch(()=>{});activePresenceRef=null}if(d&&onlineRoom)onlineListeners.forEach(([path,fn])=>d.ref(path).off('value',fn));onlineListeners=[];onlineChatReady=false;window.__onlineSessionRef=null}
 function watch(path,fn){const d=db();if(!d)return;d.ref(path).on('value',fn);onlineListeners.push([path,fn])}
 function ensureDock(){
  let dock=$id('onlineDock');if(dock)return dock;
@@ -1967,9 +1970,19 @@ function startOnline(role,user){
  const base='pgroRantingDua/liveRooms/'+onlineRoom;onlineChatReady=true;
  if(role==='student'){
    const session={name:onlineUser,role:'student',school:$id('studentSchool')?.value||'',className:$id('studentClass')?.value||'',code:$id('studentCode')?.value.trim().toUpperCase()||'',lastSeen:Date.now(),score:0,status:'Bermain'};
-   d.ref(base+'/players/'+encodeURIComponent(onlineUser)).set(session).catch(()=>{});
-   d.ref(base+'/players/'+encodeURIComponent(onlineUser)).onDisconnect().update({status:'Offline',lastSeen:Date.now()}).catch(()=>{});
-   window.__onlineSessionRef=base+'/players/'+encodeURIComponent(onlineUser);
+   // Satu sesi per tab/perangkat. Jangan gunakan nama sebagai kunci karena bisa bentrok.
+   const sessionId='session_'+d.ref().push().key;
+   const presencePath=base+'/players/'+sessionId;
+   const presenceRef=d.ref(presencePath);
+   activePresenceRef=presenceRef;
+   session.sessionId=sessionId;
+   session.connectedAt=Date.now();
+   // Pasang onDisconnect sebelum mencatat siswa online untuk menghindari ghost user.
+   presenceRef.onDisconnect().remove().then(()=>presenceRef.set(session)).catch(err=>console.warn('Firebase presence:',err));
+   window.__onlineSessionRef=presencePath;
+   presenceHeartbeat=setInterval(()=>{
+     if(activePresenceRef===presenceRef){presenceRef.update({lastSeen:Date.now()}).catch(()=>{});}
+   },15000);
  } else window.__onlineSessionRef=null;
  watch(base+'/chat',snap=>{
    const msgs=Object.entries(snap.val()||{}).sort((a,b)=>(a[1].at||0)-(b[1].at||0)).slice(-80);
@@ -1979,13 +1992,13 @@ function startOnline(role,user){
  watch(base+'/players',snap=>{
    const players=Object.values(snap.val()||{}).filter(p=>p.status!=='Offline');
    if($id('onlineCount'))$id('onlineCount').textContent='· '+players.length+' online';
-   const panel=$id('teacherLivePanel');if(panel&&onlineRole==='teacher')panel.innerHTML='<h3>🟢 Siswa yang sedang bermain ('+players.length+')</h3>'+(players.map(p=>'<div class="livePlayer"><b>'+esc(p.name)+'</b> · '+esc(p.className||'')+'<br><small>'+esc(p.status||'Bermain')+' · '+esc(p.school||'')+'</small></div>').join('')||'<p class="small">Belum ada siswa aktif di ruang kode ini.</p>');
+   const panel=$id('teacherLivePanel');if(panel&&onlineRole==='teacher'&&!document.getElementById('teacherJoinLive'))panel.innerHTML='<h3>🟢 Siswa yang sedang bermain ('+players.length+')</h3>'+(players.map(p=>'<div class="livePlayer"><b>'+esc(p.name)+'</b> · '+esc(p.className||'')+'<br><small>'+esc(p.status||'Bermain')+' · '+esc(p.school||'')+'</small></div>').join('')||'<p class="small">Belum ada siswa aktif di ruang kode ini.</p>');
  });
 }
 function ensureTeacherPanel(){
  const screen=$id('teacherScreen');if(!screen||$id('teacherLivePanel'))return;
  const panel=document.createElement('div');panel.id='teacherLivePanel';panel.className='card';
- panel.innerHTML='<h3>🎮 Pantau Game Siswa</h3><p class="small">Masukkan sekolah, kelas, dan kode soal yang dibagikan kepada siswa untuk bergabung ke ruang game, melihat siswa online, hasil, dan chat.</p><div><label>Nama sekolah</label><input id="teacherLiveSchool" placeholder="Nama sekolah sesuai data guru"></div><div class="formGrid"><div><label>Kelas</label><input id="teacherLiveClass" placeholder="Contoh: 4A"></div><div><label>Kode soal</label><input id="teacherLiveCode" placeholder="Kode dari guru"></div></div><div class="actions"><button type="button" class="primary" id="teacherJoinLive">Masuk Ruang Game</button></div><div class="actions"><button type="button" class="good" id="downloadGameResults">⬇️ Download Jawaban Siswa (CSV)</button><button type="button" class="danger" id="deleteGameResults">🗑️ Hapus Jawaban Siswa</button></div><div id="teacherLiveResults"></div>';
+ panel.innerHTML='<h3>🎮 Pantau Game Siswa</h3><p class="small">Masukkan sekolah, kelas, dan kode soal yang dibagikan kepada siswa untuk bergabung ke ruang game, melihat siswa online, hasil, dan chat.</p><div><label>Nama sekolah</label><input id="teacherLiveSchool" placeholder="Nama sekolah sesuai data guru"></div><div class="formGrid"><div><label>Kelas</label><input id="teacherLiveClass" placeholder="Contoh: 4A"></div><div><label>Kode soal</label><input id="teacherLiveCode" placeholder="Kode dari guru"></div></div><div class="actions"><button type="button" class="primary" id="teacherJoinLive">Masuk Ruang Game</button></div><div id="teacherLiveResults"></div>';
  const content=screen.querySelector('.content');if(content)content.appendChild(panel);
  $id('teacherJoinLive').onclick=()=>{
    const cls=$id('teacherLiveClass').value.trim(),code=$id('teacherLiveCode').value.trim().toUpperCase();
@@ -2095,7 +2108,7 @@ setTimeout(ensureTeacherPanel,1200);
  // Teacher can export/delete results for the currently selected school/class/code room.
  function teacherResults(){const box=$('teacherLiveResults');if(!box)return [];return [...box.querySelectorAll('.livePlayer')].map(el=>({text:el.innerText}));}
  function downloadCSV(){const rows=window.__teacherLiveResultRows||[];const header=['Nama/kelompok','Sekolah','Kelas','Kode','Skor','Tipe game','Pertanyaan','Jawaban siswa','Jawaban benar','Status benar','Tim A','Tim B','Waktu'];const csv=[header,...rows.flatMap(r=>{const answers=Array.isArray(r.answers)&&r.answers.length?r.answers:[{}];return answers.map(a=>[r.student||r.name||'',r.school||'',r.className||'',r.code||'',r.score??0,r.type||'',a.question||'',a.selected||'',a.correctAnswer||'',a.isCorrect===true?'Benar':a.isCorrect===false?'Salah':'-',r.teamScores?.A??'',r.teamScores?.B??'',r.createdAt||''].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','));})].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='jawaban-siswa-game.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- function bindTeacherButtons(){const d=$('downloadGameResults');if(d&&!d.dataset.bound){d.dataset.bound='1';d.addEventListener('click',downloadCSV);}const del=$('deleteGameResults');if(del&&!del.dataset.bound){del.dataset.bound='1';del.addEventListener('click',async()=>{if(!confirm('Hapus semua jawaban siswa di ruang sekolah/kelas/kode yang sedang dipilih? Tindakan ini tidak dapat dibatalkan.'))return;const school=window.__onlineSchool,code=window.__onlineCode;if(!school||!code){alert('Masukkan sekolah, kelas, dan kode lalu klik Masuk Ruang Game terlebih dahulu.');return}const key=( [school,window.__onlineClass||'',code].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum');const dbase=window.firebaseDB;if(!dbase){alert('Firebase belum terhubung; hasil online tidak dapat dihapus.');return}try{await Promise.all([dbase.ref('pgroRantingDua/liveRooms/'+key+'/results').remove(),dbase.ref('pgroRantingDua/liveRooms/'+key+'/raceRounds').remove()]);$('teacherLiveResults').innerHTML='<p>Jawaban siswa dan hasil Game Perahu pada ruang ini telah dihapus.</p>';}catch(err){alert('Gagal menghapus hasil. Periksa izin Firebase.');}});}}
+ function bindTeacherButtons(){const del=$('deleteGameResults');if(del&&!del.dataset.bound){del.dataset.bound='1';del.addEventListener('click',async()=>{if(!confirm('Hapus semua jawaban siswa di ruang sekolah/kelas/kode yang sedang dipilih? Tindakan ini tidak dapat dibatalkan.'))return;const school=window.__onlineSchool,code=window.__onlineCode;if(!school||!code){alert('Masukkan sekolah, kelas, dan kode lalu klik Masuk Ruang Game terlebih dahulu.');return}const key=( [school,window.__onlineClass||'',code].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum');const dbase=window.firebaseDB;if(!dbase){alert('Firebase belum terhubung; hasil online tidak dapat dihapus.');return}try{await Promise.all([dbase.ref('pgroRantingDua/liveRooms/'+key+'/results').remove(),dbase.ref('pgroRantingDua/liveRooms/'+key+'/raceRounds').remove()]);$('teacherLiveResults').innerHTML='<p>Jawaban siswa dan hasil Game Perahu pada ruang ini telah dihapus.</p>';}catch(err){alert('Gagal menghapus hasil. Periksa izin Firebase.');}});}}
  const mo=new MutationObserver(bindTeacherButtons);mo.observe(document.body,{subtree:true,childList:true});setTimeout(bindTeacherButtons,800);
 })();
 </script>
@@ -2125,10 +2138,9 @@ function leave(){modal.classList.remove('open');completedBoat=false;if(teacherWa
 $('showStudentResults').onclick=results;$('studentLeaveGame').onclick=leave;$('closeStudentResults').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
 back.onclick=()=>{teacherWatching=false;modal.classList.remove('open');try{window.exitGame?.()}catch(e){}document.querySelectorAll('.screen').forEach(x=>x.classList.add('hidden'));$('teacherScreen')?.classList.remove('hidden');back.style.display='none';try{window.loadTeacher?.()}catch(e){}};
 // Guru dapat keluar dari ruang game/pemantauan tanpa keluar dari akun guru.
-function addTeacherReturn(){const panel=$('teacherLivePanel');if(panel&&!$('teacherBackPanel')){const b=document.createElement('button');b.id='teacherBackPanel';b.type='button';b.className='ghost';b.textContent='↩ Kembali ke Panel Guru';b.onclick=()=>{teacherWatching=false;back.click();};panel.querySelector('.actions')?.appendChild(b);}}
-document.addEventListener('click',e=>{const el=e.target.closest('button');if(!el)return;if(el.id==='teacherJoinLive'){teacherWatching=true;setTimeout(addTeacherReturn,100)}if(el.id==='resultExitBtn'&&teacherWatching){e.preventDefault();e.stopImmediatePropagation();back.click();}},true);
+function addTeacherReturn(){document.getElementById('teacherBackPanel')?.remove();}
 let lastGame=false;
-setInterval(()=>{const playing=!$('game')?.classList.contains('hidden');tools.style.display=playing&&!teacherWatching?'flex':'none';back.style.display=playing&&teacherWatching?'block':'none';addTeacherReturn();if(playing&&!lastGame)completedBoat=false;lastGame=playing;
+setInterval(()=>{const playing=!$('game')?.classList.contains('hidden');tools.style.display=playing&&!teacherWatching?'flex':'none';back.style.display='none';addTeacherReturn();if(playing&&!lastGame)completedBoat=false;lastGame=playing;
  // Game perahu otomatis selesai ketika jumlah jawaban mencapai jumlah soal.
  /* Game perahu tetap berlangsung sampai batas waktu guru. */
 },500);
@@ -2163,7 +2175,7 @@ function updateBoatDuration(){
  const total=durationSeconds();
  let remaining=total;
  try{if(window.__boatDeadline)remaining=Math.max(0,Math.ceil((window.__boatDeadline-Date.now())/1000));else if(typeof gameTimeLeft!=='undefined'&&Number.isFinite(Number(gameTimeLeft)))remaining=Math.max(0,Number(gameTimeLeft))}catch(e){}
- box.innerHTML='⏱️ Waktu total dari guru: <strong>'+clock(total)+'</strong> · Sisa waktu: <span class="remaining">'+clock(remaining)+'</span>';
+ box.innerHTML=(!window.__boatTimerUnlocked?'⏸️ MENUNGGU SEMUA TIM SIAP · ':'')+'⏱️ Waktu total dari guru: <strong>'+clock(total)+'</strong> · Sisa waktu: <span class="remaining">'+clock(remaining)+'</span>';
  box.classList.toggle('expired',remaining<=0);
 }
 // Pembersihan otomatis pada ruang chat yang aktif; berlaku bagi chat guru maupun siswa.
@@ -2189,6 +2201,74 @@ async function cleanupChat(){
 setInterval(updateBoatDuration,500);updateBoatDuration();
 setInterval(cleanupChat,60000);setTimeout(cleanupChat,4000);
 document.addEventListener('click',e=>{if(e.target.closest('#teacherJoinLive, #startStudentBtn, #startStudentGame'))setTimeout(cleanupChat,2500)},true);
+})();
+</script>
+
+
+<style>
+#teacherReturnGame,#teacherBackPanel{display:none!important}
+#teacherRoomView{position:fixed;inset:0;z-index:9000;background:#07152f;color:white;overflow:auto;padding:20px}
+#teacherRoomView.hidden{display:none!important}
+#teacherRoomView .teacherRoomTop{display:flex;gap:12px;align-items:center;flex-wrap:wrap;position:sticky;top:0;background:#07152f;padding:10px;z-index:2}
+#teacherRoomView .teacherRoomTop button{background:#facc15;color:#422006}
+#teacherRoomView .roomGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+#teacherRoomView .roomBox{padding:16px;background:#153568;border-radius:15px;min-width:0}
+#teacherRoomView .roomEntry{padding:10px;border-bottom:1px solid #ffffff33;overflow-wrap:anywhere}
+#teacherRoomView .roomEntry button{margin:5px;background:#ff536d;color:white}
+#teacherRoomView select{max-width:350px}
+</style>
+<script>
+/* Panel guru: ruang pemantauan langsung, tanpa mengubah status siswa atau memulai timer siswa. */
+(function(){'use strict';
+const $=id=>document.getElementById(id);
+let refs=[],currentRoom='',results={},rounds={},players={},filter='all',opened=false;
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const roomKey=()=>[($('teacherLiveSchool')?.value||window.__onlineSchool||'').trim(),($('teacherLiveClass')?.value||window.__onlineClass||'').trim(),($('teacherLiveCode')?.value||window.__onlineCode||'').trim().toUpperCase()].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';
+function db(){return window.firebaseDB}
+function close(){opened=false;refs.forEach(([r,f])=>r.off('value',f));refs=[];$('teacherRoomView')?.classList.add('hidden');$('teacherScreen')?.classList.remove('hidden');}
+function watch(path,cb){const r=db().ref(path),fn=s=>cb(s.val()||{});r.on('value',fn,e=>{const x=$('teacherRoomError');if(x)x.textContent='Gagal membaca Firebase: '+e.message});refs.push([r,fn]);}
+function kind(v){return String(v?.type||v?.gameType||v?.game||'Game').trim()||'Game'}
+function activeCode(){return String($('teacherLiveCode')?.value||window.__onlineCode||'').trim().toUpperCase()}
+function codeMatches(value,parent){const code=String(value?.code||value?.questionCode||value?.kodeSoal||parent?.code||parent?.questionCode||parent?.kodeSoal||'').trim().toUpperCase();return code===activeCode()}
+function filteredResults(){return Object.entries(results).filter(([,r])=>codeMatches(r)&& (filter==='all'||kind(r)===filter))}
+function filteredBoat(){return Object.entries(rounds).flatMap(([roundId,r])=>Object.entries(r?.answers||{}).filter(([,a])=>codeMatches(a,r)).map(([answerId,a])=>({roundId,answerId,a}))) }
+
+function render(){if(!opened)return;
+ const all=Object.entries(results).filter(([,r])=>codeMatches(r));
+ const boat=filteredBoat();
+ const games=[...new Set(all.map(([,r])=>kind(r)).filter(Boolean))];
+ if(boat.length&&!games.some(g=>/perahu/i.test(g)))games.push('Perahu');
+ const select=$('teacherRoomFilter');if(select){select.innerHTML='<option value="all">Semua game</option>'+games.map(g=>'<option value="'+esc(g)+'">'+esc(g)+'</option>').join('');if(filter!=='all'&&!games.includes(filter))filter='all';select.value=filter;}
+ const now=Date.now();
+ const onlinePlayers=Object.values(players).filter(p=>p&&p.role==='student'&&p.status!=='Offline'&&Number(p.lastSeen)>0&&Math.abs(now-Number(p.lastSeen))<45000);
+ $('teacherRoomPlayers').innerHTML=onlinePlayers.map(p=>'<div class="roomEntry">'+esc(p.name||'Siswa')+' · '+esc(p.team||p.selectedTeam||'-')+' · 🟢 Online</div>').join('')||'Belum ada siswa yang sedang online.';
+ const visible=all.filter(([,r])=>filter==='all'||kind(r)===filter);
+ const groupNames=filter==='all'?games:[filter];
+ const container=$('teacherRoomResults');
+ container.innerHTML=groupNames.map(g=>{const items=visible.filter(([,r])=>kind(r)===g);const isBoat=/perahu/i.test(g);const perahu=isBoat?boat:[];
+ const score=items.reduce((sum,[,r])=>sum+(Number(r.score)||0),0);
+ const entries=items.map(([id,r])=>'<div class="roomEntry"><b>'+esc(r.student||r.name||'Siswa')+'</b> · Nilai '+esc(r.score??0)+'<div>'+(Array.isArray(r.answers)?r.answers.map((a,i)=>'<div style="padding:6px;border-top:1px solid #ffffff22">'+esc(a.question||a.q||'Soal '+(i+1))+' → '+esc(a.selected??a.answerText??a.answer??'-')+' <button type="button" data-delete-result="'+esc(id)+'" data-answer-index="'+i+'">Hapus jawaban soal</button></div>').join(''):'')+'</div><button type="button" data-delete-result="'+esc(id)+'">Hapus hasil siswa</button></div>').join('');
+ const boatEntries=perahu.map(({roundId,answerId,a})=>'<div class="roomEntry"><b>'+esc(a.name||'Siswa')+'</b> · Tim '+esc(a.team||'-')+' · '+esc(a.question||'Soal '+roundId)+' → '+esc(a.selected??a.answer??'-')+' · '+esc(a.points??0)+' poin <button type="button" data-delete-round="'+esc(roundId)+'" data-delete-answer="'+esc(answerId)+'">Hapus jawaban</button></div>');
+ return '<section class="roomBox" style="margin-bottom:12px"><h3 style="margin-top:0">🎮 '+esc(g)+' · Kode '+esc(activeCode())+'</h3><p>'+items.length+' hasil siswa · Total nilai hasil '+score+(isBoat?' · '+perahu.length+' jawaban perahu':'')+'</p>'+(entries.join('')+boatEntries.join('')||'<p>Belum ada jawaban untuk game dan kode soal ini.</p>')+'</section>';}).join('')||'<div class="roomBox">Belum ada hasil untuk kode soal '+esc(activeCode())+'.</div>';
+ const score={A:0,B:0};const matches={};boat.forEach(({a})=>{const t=String(a.team||'').toUpperCase();if((t==='A'||t==='B')&&a.correct===true){const pts=Number(a.points)||0;score[t]+=pts;const match=String(a.matchId||'Tanpa ID');(matches[match]??={A:0,B:0})[t]+=pts;}});
+ const showBoat=/perahu/i.test(filter);
+ $('teacherBoatTotal').style.display=showBoat?'block':'none';
+ $('teacherBoatTotal').innerHTML='<h3>🚤 Nilai Tim Game Perahu · '+esc(activeCode())+'</h3><div style="display:flex;gap:12px;flex-wrap:wrap"><div class="roomEntry" style="flex:1"><b>TIM A</b><div style="font-size:30px;font-weight:900">'+score.A+' poin</div></div><div class="roomEntry" style="flex:1"><b>TIM B</b><div style="font-size:30px;font-weight:900">'+score.B+' poin</div></div></div>'+(Object.keys(matches).length>1?'<p>Per pertandingan: '+Object.entries(matches).map(([id,v])=>esc(id)+': A '+v.A+' / B '+v.B).join(' · ')+'</p>':'');
+
+ $('teacherRoomCount').textContent='Kode '+activeCode()+' · '+onlinePlayers.length+' siswa online · '+visible.length+' hasil · '+(showBoat?boat.length:0)+' jawaban perahu';
+}
+
+function ensure(){if($('teacherRoomView'))return;const div=document.createElement('section');div.id='teacherRoomView';div.className='hidden';div.innerHTML='<div class="teacherRoomTop"><button type="button" id="teacherRoomBack">↩ Kembali ke Panel Guru</button><h2 style="margin:0">🎮 Ruang Game Siswa · Pemantauan Realtime</h2></div><p id="teacherRoomCount"></p><p id="teacherRoomError" style="color:#ffd54f"></p><label for="teacherRoomFilter">Pilih game untuk melihat atau menghapus jawaban</label><select id="teacherRoomFilter"><option value="all">Semua game</option></select><div class="actions"><button type="button" class="good" id="teacherRoomDownload">⬇️ Download Jawaban Sesuai Kode Soal (CSV)</button><button type="button" class="danger" id="teacherRoomDeleteAll">🗑️ Hapus semua jawaban game terpilih</button></div><div id="teacherBoatTotal" class="roomBox" style="margin:12px 0"></div><div class="roomGrid"><div class="roomBox"><h3>👥 Siswa Online</h3><div id="teacherRoomPlayers"></div></div><div class="roomBox"><h3>📊 Hasil Setiap Game Berdasarkan Kode Soal</h3><div id="teacherRoomResults"></div></div></div>';document.body.appendChild(div);
+ $('teacherRoomBack').onclick=close;$('teacherRoomFilter').onchange=e=>{filter=e.target.value;render()};
+ div.addEventListener('click',async e=>{const result=e.target.closest('[data-delete-result]'),answer=e.target.closest('[data-delete-answer]');if(!result&&!answer)return;const path=result?'results/'+result.dataset.deleteResult:'raceRounds/'+answer.dataset.deleteRound+'/answers/'+answer.dataset.deleteAnswer;if(!confirm('Hapus jawaban siswa ini dari Firebase secara permanen?'))return;try{const ref=db().ref(currentRoom+'/'+path);if(result&&result.hasAttribute('data-answer-index')){const idx=Number(result.dataset.answerIndex);const tx=await ref.transaction(v=>{if(!v||!Array.isArray(v.answers)||idx<0||idx>=v.answers.length)return;const answers=v.answers.slice();answers.splice(idx,1);return {...v,answers,score:answers.reduce((sum,a)=>sum+(Number(a.points)||0),0)}});if(!tx.committed)throw Error('Jawaban tidak ditemukan atau sudah berubah.')}else await ref.remove()}catch(err){alert('Gagal menghapus: '+err.message)}});
+ $('teacherRoomDownload').onclick=()=>{if(!currentRoom){alert('Masuk ruang game terlebih dahulu.');return}const code=($('teacherLiveCode')?.value||'').trim();if(!code){alert('Masukkan kode soal terlebih dahulu.');return}const school=($('teacherLiveSchool')?.value||'').trim(),cls=($('teacherLiveClass')?.value||'').trim();const rows=[];const add=(r,a,game,team,match,round)=>{rows.push([school,cls,code,game,r.student||r.name||a.name||'',team||'',match||'',round||'',a.question||a.q||'',a.selected??a.answerText??a.answer??'',a.correctAnswer||'',a.isCorrect===true||a.correct===true?'Benar':a.isCorrect===false||a.correct===false?'Salah':'',a.points??'',r.score??'',a.at?new Date(a.at).toISOString():r.createdAt||'']);};Object.values(results).forEach(r=>{if(!codeMatches(r))return;if(filter!=='all'&&kind(r)!==filter)return;const answers=Array.isArray(r.answers)?r.answers:[];if(!answers.length)add(r,{},kind(r),'','','');else answers.forEach(a=>add(r,a,kind(r),'','',''));});if(filter==='all'||/perahu/i.test(filter)){Object.entries(rounds).forEach(([rid,r])=>Object.values(r?.answers||{}).forEach(a=>{if(!codeMatches(a,r))return;add(a,a,'Game Perahu',a.team,a.matchId,rid)}));}if(!rows.length){alert('Tidak ada jawaban Firebase untuk kode soal dan game yang dipilih.');return}const headers=['Sekolah','Kelas','Kode soal','Game','Nama siswa','Tim','ID pertandingan','Ronde','Pertanyaan','Jawaban siswa','Jawaban benar','Status','Poin jawaban','Skor hasil','Waktu'];const csv='\ufeff'+[headers,...rows].map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='jawaban_'+code.replace(/[^a-z0-9_-]/gi,'_')+'_'+(filter==='all'?'semua_game':filter.replace(/[^a-z0-9_-]/gi,'_'))+'.csv';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ $('teacherRoomDeleteAll').onclick=async()=>{const ids=filteredResults().map(([id])=>id);const boat=filter==='all'||/perahu/i.test(filter);const changes={};ids.forEach(id=>changes['results/'+id]=null);if(boat)filteredBoat().forEach(({roundId,answerId})=>changes['raceRounds/'+roundId+'/answers/'+answerId]=null);if(!Object.keys(changes).length){alert('Tidak ada jawaban pada game terpilih.');return}if(!confirm('Hapus '+Object.keys(changes).length+' data jawaban dari Firebase? Tidak dapat dibatalkan.'))return;try{await db().ref(currentRoom).update(changes)}catch(err){alert('Gagal menghapus: '+err.message)}};
+}
+function open(){ensure();if(!db()){alert('Firebase belum tersambung.');return}const school=$('teacherLiveSchool')?.value.trim(),code=$('teacherLiveCode')?.value.trim();if(!school||!code||!$('teacherLiveClass')?.value.trim()){alert('Isi nama sekolah, kelas, dan kode soal sama persis dengan yang digunakan siswa.');return}close();currentRoom='pgroRantingDua/liveRooms/'+roomKey();opened=true;$('teacherRoomView').classList.remove('hidden');filter='all';results={};rounds={};players={};watch(currentRoom+'/results',v=>{results=v;render()});watch(currentRoom+'/raceRounds',v=>{rounds=v;render()});watch(currentRoom+'/players',v=>{players=v;render()});render()}
+// Capture before legacy handlers, so the old teacher panel cannot be overwritten by its live-player listener.
+document.addEventListener('click',e=>{const btn=e.target.closest('#teacherJoinLive');if(btn){e.preventDefault();e.stopImmediatePropagation();open()}const del=e.target.closest('#deleteGameResults');if(del){e.preventDefault();e.stopImmediatePropagation();open();}},true);
+setInterval(()=>{if(opened)render()},5000);
+window.addEventListener('pagehide',close);
 })();
 </script>
 
@@ -2272,7 +2352,7 @@ const mo=new MutationObserver(()=>ensureInputTools());mo.observe(document.body,{
 'use strict';
 const $=id=>document.getElementById(id);
 const db=()=>window.firebaseDB||null;
-let room='',role='student',person='',team='A',raceTimer=null,raceAnswered=false,raceSecondsLeft=20,raceSelected=null,raceStartedAt=0;
+let room='',role='student',person='',team='',raceTimer=null,raceAnswered=false,raceSecondsLeft=20,raceSelected=null,raceStartedAt=0;
 let raceStarted=false,raceReady=false,racePresence=null,racePresenceRef=null,racePresenceTimer=null,racePlayersRef=null,raceScoresRef=null,raceSession='',raceJoining=false;
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function roomFromForm(){return [ $('studentSchool')?.value||'', $('studentClass')?.value||'', $('studentCode')?.value||''].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum'}
@@ -2289,7 +2369,7 @@ function connectChat(){
  if(!d){$('onlineMessages').textContent='Chat belum tersambung: konfigurasi Firebase tidak ditemukan.';return}
  const msgRef=d.ref(roomPath()+'/chat');msgRef.off('value');
  msgRef.on('value',snap=>{const vals=Object.values(snap.val()||{}).sort((a,b)=>(a.at||0)-(b.at||0)).slice(-100);$('onlineMessages').innerHTML=vals.map(m=>'<div class="onlineMsg"><b>'+safe(m.name||'Pengguna')+'</b> <small>('+safe(m.role==='teacher'?'Guru':'Siswa')+')</small><br>'+safe(m.text||'')+'</div>').join('')||'Belum ada pesan. Mulai menyapa!';$('onlineMessages').scrollTop=$('onlineMessages').scrollHeight},err=>{$('onlineMessages').textContent='Chat tidak dapat dibaca. Periksa Firebase Database Rules.'});
- d.ref(roomPath()+'/players').on('value',snap=>{const now=Date.now(),players=Object.values(snap.val()||{}).filter(p=>p.status!=='Offline'&&now-(p.lastSeen||now)<120000);if($('onlineCount'))$('onlineCount').textContent=players.length+' online';});
+ d.ref(roomPath()+'/players').on('value',snap=>{const now=Date.now(),players=Object.values(snap.val()||{}).filter(p=>p.role==='student'&&p.status!=='Offline'&&Number(p.lastSeen)>0&&Math.abs(now-Number(p.lastSeen))<45000);if($('onlineCount'))$('onlineCount').textContent=players.length+' online';});
 }
 async function assignTeam(){
  const d=db();if(!d||!room){team='A';return}
@@ -2298,44 +2378,37 @@ async function assignTeam(){
 }
 
 function raceNotice(message){const el=$('boatRaceStatus');if(el)el.textContent=message;}
-function raceLockUI(){const panel=$('boatRaceGame');if(!panel)return;panel.querySelectorAll('[data-race-answer]').forEach(b=>b.disabled=!raceReady||raceAnswered);panel.querySelectorAll('[data-race-team]').forEach(b=>b.disabled=true);}
-function raceUpdateScores(data){let a=0,b=0;Object.values(data||{}).forEach(round=>Object.values(round?.answers||{}).forEach(v=>{if(v.correct){if(v.team==='A')a+=Number(v.points)||0;else if(v.team==='B')b+=Number(v.points)||0}}));if($('raceScoreA'))$('raceScoreA').textContent=a;if($('raceScoreB'))$('raceScoreB').textContent=b;if($('raceProgressA'))$('raceProgressA').style.width=Math.min(100,a)+'%';if($('raceProgressB'))$('raceProgressB').style.width=Math.min(100,b)+'%';}
-function raceDisconnect(){raceReady=false;raceStarted=false;clearInterval(racePresenceTimer);racePresenceTimer=null;if(racePlayersRef){racePlayersRef.off('value');racePlayersRef=null}if(raceScoresRef){raceScoresRef.off('value');raceScoresRef=null}if(racePresenceRef){racePresenceRef.remove().catch(()=>{});racePresenceRef=null}racePresence=null;raceSession='';}
+let raceCountdown=null,raceStartAt=0,raceMatchId='',raceMatchRef=null,raceMatchListener=null,raceFinished=false,raceAllPlayersReady=false;
+function raceLockUI(){const panel=$('boatRaceGame');if(!panel)return;panel.querySelectorAll('[data-race-answer]').forEach(b=>b.disabled=!raceReady||raceAnswered||raceFinished);panel.querySelectorAll('[data-race-team]').forEach(b=>b.disabled=!!raceStarted||!!racePresence?.ready);const ready=$('boatReadyButton');if(ready){ready.disabled=!racePresenceRef||!team||!!racePresence?.ready||raceStarted;ready.textContent=racePresence?.ready?'✅ SUDAH SIAP':'✅ SAYA SIAP';}}
+function raceUpdateScores(data){let a=0,b=0;if(!raceStarted||raceFinished){data={};}Object.values(data||{}).forEach(round=>Object.values(round?.answers||{}).forEach(v=>{if(v.matchId===raceMatchId&&v.correct){if(v.team==='A')a+=Number(v.points)||0;else if(v.team==='B')b+=Number(v.points)||0}}));if($('raceScoreA'))$('raceScoreA').textContent=a;if($('raceScoreB'))$('raceScoreB').textContent=b;if($('raceProgressA'))$('raceProgressA').style.width=Math.min(100,a)+'%';if($('raceProgressB'))$('raceProgressB').style.width=Math.min(100,b)+'%';}
+function stopRaceCountdown(){if(raceCountdown)clearInterval(raceCountdown);raceCountdown=null;}
+function raceDisconnect(){window.__boatTimerUnlocked=false;window.__boatDeadline=0;raceAllPlayersReady=false;raceReady=false;raceStarted=false;stopRaceCountdown();clearInterval(racePresenceTimer);racePresenceTimer=null;if(racePlayersRef){racePlayersRef.off('value');racePlayersRef=null}if(raceScoresRef){raceScoresRef.off('value');raceScoresRef=null}if(raceMatchRef&&raceMatchListener){raceMatchRef.off('value',raceMatchListener)}raceMatchRef=null;raceMatchListener=null;if(racePresenceRef){racePresenceRef.remove().catch(()=>{});racePresenceRef=null}racePresence=null;raceSession='';}
+function raceShowLobby(){const lobby=$('boatRaceLobby');if(lobby)lobby.style.display=raceStarted?'none':'flex';const answers=$('boatRaceAnswers');if(answers)answers.style.display=raceStarted?'grid':'none';const prompt=$('racePrompt');if(prompt)prompt.style.display=raceStarted?'block':'none';const timer=$('boatRaceTimer');if(timer)timer.style.display=raceStarted?'flex':'none';raceLockUI();}
+function raceRunCountdown(startAt){stopRaceCountdown();raceStartAt=startAt;raceStarted=false;raceReady=false;raceShowLobby();const tick=()=>{let left=Math.max(0,Math.ceil((raceStartAt-Date.now())/1000));const el=$('boatCountdownValue');if(el)el.textContent=left;if(left===0){if(!raceAllPlayersReady){stopRaceCountdown();raceNotice('Menunggu seluruh siswa menekan SIAP.');return;}stopRaceCountdown();raceStarted=true;raceReady=true;window.__boatTimerUnlocked=true;window.__boatDeadline=raceStartAt+(window.__boatTotalSeconds||600)*1000;raceShowLobby();raceNotice('🚤 MULAI! Kedua tim sekarang dapat menjawab.');}};tick();if(!raceStarted)raceCountdown=setInterval(tick,200);}
+async function raceStartMatchIfReady(valid){const a=valid.filter(p=>p.team==='A'),b=valid.filter(p=>p.team==='B');if(!a.length||!b.length||!valid.every(p=>p.ready===true))return;const ref=db().ref(roomPath()+'/boatMatch');await ref.transaction(v=>{if(v&&v.status==='countdown'&&v.startAt>Date.now()-15000)return; if(v&&v.status==='playing'&&v.startAt>Date.now()-3600000)return;return {status:'countdown',startAt:Date.now()+10000,matchId:'match_'+Date.now(),createdAt:Date.now()};},undefined,false);}
 async function raceConnect(){
  if(raceJoining||raceSession===room&&racePresenceRef)return;
  raceJoining=true;raceDisconnect();const d=db();if(!d||!room){raceNotice('Firebase belum terhubung. Game perahu membutuhkan dua siswa online.');raceLockUI();raceJoining=false;return}
  try{
   const connected=await d.ref('.info/connected').once('value');if(connected.val()!==true)throw Error('Firebase sedang offline');
-  const players=d.ref(roomPath()+'/boatPlayers');
-  const token='p_'+Math.random().toString(36).slice(2)+'_'+Date.now().toString(36);
+  const players=d.ref(roomPath()+'/boatPlayers');const token='p_'+Math.random().toString(36).slice(2)+'_'+Date.now().toString(36);
   const entry=players.child(token);racePresenceRef=entry;raceSession=room;
-  await entry.onDisconnect().remove();
-  const snapshot=await players.once('value');const active=Object.values(snapshot.val()||{}).filter(x=>Date.now()-(Number(x.at)||0)<30000);
-  const a=active.filter(x=>x.team==='A').length,b=active.filter(x=>x.team==='B').length;
-  team=a<=b?'A':'B';
-  await entry.set({name:person,team,at:firebase.database.ServerValue.TIMESTAMP,role:'student',ready:false});
-  racePresenceTimer=setInterval(()=>{if(racePresenceRef)racePresenceRef.update({at:firebase.database.ServerValue.TIMESTAMP}).catch(()=>{raceReady=false;raceLockUI()})},10000);
-  racePlayersRef=players;players.on('value',snap=>{
-   const valid=Object.values(snap.val()||{}).filter(x=>Date.now()-(Number(x.at)||0)<30000);
-   const a=valid.filter(x=>x.team==='A').length,b=valid.filter(x=>x.team==='B').length;
-   const was=raceReady;raceReady=a>=1&&b>=1&&valid.length>=2&&valid.filter(x=>x.team==='A').every(x=>x.ready===true)&&valid.filter(x=>x.team==='B').every(x=>x.ready===true);raceStarted=raceReady;
-   raceLockUI();
-   if(!raceReady){stopRaceTimer();raceNotice('Menunggu Tim A dan Tim B menekan SIAP (A: '+a+', B: '+b+').');}
-   else if(!was){raceNotice('Dua tim sudah online! Kamu di TIM '+team+'. Silakan mulai menjawab.');}
-  },e=>{raceReady=false;raceLockUI();raceNotice('Gagal membaca pemain online: '+e.message)});
-  raceScoresRef=d.ref(roomPath()+'/raceRounds');raceScoresRef.on('value',snap=>raceUpdateScores(snap.val()),e=>console.warn('Skor Firebase:',e));
- }catch(e){raceReady=false;raceLockUI();raceNotice('Tidak dapat bergabung ke game perahu: '+e.message+' — periksa Firebase Rules dan koneksi.');}
- finally{raceJoining=false}
+  await entry.onDisconnect().remove();racePresence={name:person,team:team||'',at:Date.now(),role:'student',ready:false};await entry.set(racePresence);
+  racePresenceTimer=setInterval(()=>{if(racePresenceRef)racePresenceRef.update({at:firebase.database.ServerValue.TIMESTAMP}).catch(()=>raceNotice('Koneksi Firebase terputus.'))},10000);
+  raceMatchRef=d.ref(roomPath()+'/boatMatch');raceMatchListener=snap=>{const m=snap.val();if(!m||m.status==='finished'){window.__boatTimerUnlocked=false;window.__boatDeadline=0;raceFinished=!!m;raceStarted=false;raceReady=false;stopRaceCountdown();raceShowLobby();raceUpdateScores({});if(m)raceNotice('Permainan selesai. Skor kedua tim sudah direset.');return;}raceMatchId=m.matchId||'';raceFinished=false;if(m.status==='countdown'){raceRunCountdown(m.startAt)}else if(m.status==='playing'||Date.now()>=m.startAt){if(!raceAllPlayersReady)return;stopRaceCountdown();raceStarted=true;raceReady=true;window.__boatTimerUnlocked=true;window.__boatDeadline=Number(m.startAt)+(window.__boatTotalSeconds||600)*1000;raceShowLobby();}};raceMatchRef.on('value',raceMatchListener);
+  racePlayersRef=players;players.on('value',snap=>{const valid=Object.values(snap.val()||{}).filter(x=>Date.now()-(Number(x.at)||0)<30000);const a=valid.filter(x=>x.team==='A').length,b=valid.filter(x=>x.team==='B').length;const ready=valid.filter(x=>x.ready).length;raceAllPlayersReady=!!(a&&b&&valid.length>=2&&valid.every(x=>x.ready===true));if(!raceAllPlayersReady&&!raceStarted){stopRaceCountdown();window.__boatTimerUnlocked=false;window.__boatDeadline=0;raceReady=false;raceShowLobby();}const info=$('boatReadyInfo');if(info)info.textContent='Online: Tim A '+a+' • Tim B '+b+' • Siap '+ready+'/'+valid.length;if(!raceStarted&&!raceCountdown){raceNotice('Pilih TIM A atau B, lalu tekan SAYA SIAP. Permainan dimulai setelah hitung mundur 10 detik.');}if(raceAllPlayersReady)raceStartMatchIfReady(valid).catch(console.warn);raceLockUI();},e=>raceNotice('Gagal membaca pemain: '+e.message));
+  raceScoresRef=d.ref(roomPath()+'/raceRounds');raceScoresRef.on('value',snap=>raceUpdateScores(snap.val()));raceShowLobby();
+ }catch(e){raceReady=false;raceNotice('Tidak dapat bergabung: '+e.message)}finally{raceJoining=false}
 }
 function getQ(){try{return window.__gameApi?.getQuestion()||window.gameQuestions?.[window.gameIndex]}catch(e){return null}}
 function gameOn(){const g=$('game');return !!g&&!g.classList.contains('hidden')&&$('gameMessage')?.style.display!=='flex'}
 function setupBoatRace(){
  const q=getQ();if(!q||q.type!=='isian'||!gameOn())return;
- let old=$('boatRaceGame');if(old){renderBoatQuestion();return;}
+ let old=$('boatRaceGame');if(old){return;}
  const stream=$('woodStream'),target=$('woodTarget');if(!stream&&!target)return;
  const host=$('game')||stream?.parentElement||target?.parentElement;if(!host)return;
  old=document.createElement('section');old.id='boatRaceGame';
- old.innerHTML='<div class="raceTrack"><div class="raceBoat" id="raceBoatA"><div class="boatArt">🚣</div><div>TIM A · <span id="raceScoreA">0</span> poin</div><div class="raceProgress"><span id="raceProgressA"></span></div></div><div class="raceBoat" id="raceBoatB"><div class="boatArt">🛶</div><div>TIM B · <span id="raceScoreB">0</span> poin</div><div class="raceProgress"><span id="raceProgressB"></span></div></div></div><div class="racePrompt" id="racePrompt">Soal akan muncul di sini</div><div class="raceTeamPicker"><b>Pilih tim:</b><button type="button" data-race-team="A">🟦 TIM A</button><button type="button" data-race-team="B">🟥 TIM B</button></div><div style="text-align:center"><button type="button" id="boatReadyButton" class="good">✅ SAYA SIAP</button><span id="boatReadyInfo" style="margin-left:12px;font-weight:bold">Menunggu kesiapan dua tim</span></div><div id="boatRaceTimer" aria-live="polite">⏱️ <b id="boatRaceTime">20</b> detik <span class="timerTrack"><span id="boatRaceTimeBar"></span></span></div><div id="boatRaceAnswers"></div><div id="boatRaceStatus">Pilih tim dan klik perahu jawaban. Timer 20 detik dimulai setelah pilihan pertama.</div>';
+ old.innerHTML='<div class="raceTrack"><div class="raceBoat" id="raceBoatA"><div class="boatArt">🚣</div><div>TIM A · <span id="raceScoreA">0</span> poin</div><div class="raceProgress"><span id="raceProgressA"></span></div></div><div class="raceBoat" id="raceBoatB"><div class="boatArt">🛶</div><div>TIM B · <span id="raceScoreB">0</span> poin</div><div class="raceProgress"><span id="raceProgressB"></span></div></div></div><div id="boatRaceLobby" style="display:flex;flex-direction:column;align-items:center;gap:12px;background:#ffffffed;color:#123c58;border-radius:18px;padding:18px"><h2 style="margin:0">🚤 Persiapan Lomba Perahu</h2><div class="raceTeamPicker"><b>Pilih tim:</b><button type="button" data-race-team="A">🟦 TIM A</button><button type="button" data-race-team="B">🟥 TIM B</button></div><button type="button" id="boatReadyButton" class="good">✅ SAYA SIAP</button><strong id="boatReadyInfo">Pilih tim terlebih dahulu</strong><div style="font-size:24px;font-weight:900">Mulai dalam <span id="boatCountdownValue">10</span> detik</div></div><div class="racePrompt" id="racePrompt">Soal akan muncul di sini</div><div id="boatRaceTimer" aria-live="polite">⏱️ <b id="boatRaceTime">20</b> detik <span class="timerTrack"><span id="boatRaceTimeBar"></span></span></div><div id="boatRaceAnswers"></div><div id="boatRaceStatus">Pilih tim dan klik perahu jawaban. Timer 20 detik dimulai setelah pilihan pertama.</div>';
  host.appendChild(old);
  if(stream)stream.style.display='none';if(target)target.style.display='none';
  renderBoatQuestion();raceConnect();
@@ -2350,14 +2423,14 @@ function renderBoatQuestion(){
  $('boatRaceAnswers').innerHTML=(q.a||[]).map((a,i)=>'<button type="button" data-race-answer="'+i+'"><span>'+('ABCD'[i])+'. '+safe(a)+'</span></button>').join('');
  $('raceBoatA').classList.toggle('active',team==='A');$('raceBoatB').classList.toggle('active',team==='B');
  document.querySelectorAll('[data-race-team]').forEach(b=>b.classList.toggle('active',b.dataset.raceTeam===team));
- $('boatRaceStatus').textContent='Tim terpilih: TIM '+team+'. Klik satu perahu untuk memulai timer 20 detik; jawaban boleh diganti sebelum waktu habis.';
- paintRaceTimer();raceAnswered=false;raceLockUI();
+ $('boatRaceStatus').textContent='Menunggu permainan dimulai bersama kedua tim.';
+ paintRaceTimer();raceAnswered=false;raceShowLobby();
 }
-async function markRaceReady(){if(!racePresenceRef)return raceNotice('Menunggu koneksi Firebase...');try{await racePresenceRef.update({ready:true});const b=$('boatReadyButton');if(b){b.disabled=true;b.textContent='✅ SUDAH SIAP'}raceNotice('Kamu sudah siap. Menunggu semua pemain Tim A dan Tim B siap.')}catch(e){raceNotice('Gagal menyimpan kesiapan: '+e.message)}}
+async function markRaceReady(){if(!racePresenceRef)return raceNotice('Menunggu koneksi Firebase...');if(!team)return raceNotice('Pilih TIM A atau TIM B terlebih dahulu.');try{await racePresenceRef.update({ready:true,team});racePresence={...racePresence,ready:true,team};raceLockUI();raceNotice('Sudah siap. Menunggu pemain tim lain dan hitung mundur 10 detik.')}catch(e){raceNotice('Gagal menyimpan kesiapan: '+e.message)}}
 function chooseRaceAnswer(idx){if(!raceReady){raceNotice('Tunggu hingga Tim A dan Tim B sama-sama online di Firebase.');return;}if(raceAnswered||!getQ()||!document.querySelector('#boatRaceAnswers [data-race-answer="'+idx+'"]'))return;raceSelected=Number(idx);document.querySelectorAll('#boatRaceAnswers button').forEach((b,i)=>{b.classList.toggle('chosen',i===raceSelected);b.setAttribute('aria-pressed',i===raceSelected?'true':'false')});if(!raceTimer)startRaceTimer();$('boatRaceStatus').textContent='Pilihan sementara: '+('ABCD'[raceSelected])+'. Kamu masih bisa mengganti jawaban selama '+raceSecondsLeft+' detik.';}
-function selectRaceTeam(t){if(racePresenceRef){raceNotice('Tim ditentukan otomatis oleh Firebase agar dua pemain saling beradu.');return;}if(raceAnswered||raceTimer){if($('boatRaceStatus'))$('boatRaceStatus').textContent='Tim terkunci setelah timer dimulai. Jawaban masih bisa diganti sampai waktu habis.';return;}team=t==='B'?'B':'A';$('raceBoatA')?.classList.toggle('active',team==='A');$('raceBoatB')?.classList.toggle('active',team==='B');document.querySelectorAll('[data-race-team]').forEach(b=>b.classList.toggle('active',b.dataset.raceTeam===team));if($('boatRaceStatus'))$('boatRaceStatus').textContent='Kamu memilih TIM '+team+'. Pilih/ganti perahu jawaban sebelum timer habis.';}
+async function selectRaceTeam(t){if(raceStarted||racePresence?.ready){raceNotice('Tim tidak dapat diubah setelah menekan SIAP.');return;}team=t==='B'?'B':'A';$('raceBoatA')?.classList.toggle('active',team==='A');$('raceBoatB')?.classList.toggle('active',team==='B');document.querySelectorAll('[data-race-team]').forEach(b=>b.classList.toggle('active',b.dataset.raceTeam===team));if(racePresenceRef){try{await racePresenceRef.update({team});racePresence={...racePresence,team}}catch(e){raceNotice('Gagal memilih tim: '+e.message)}}raceLockUI();raceNotice('Tim '+team+' dipilih. Tekan SAYA SIAP.');}
 async function submitRaceAnswer(idx,fromTimer=false){
- const q=getQ(),d=db();if(!raceReady||!d||!q||raceAnswered)return;
+ const q=getQ(),d=db();if(!raceReady||!raceStarted||!d||!q||raceAnswered)return;
  if(!fromTimer&&raceSelected===null){chooseRaceAnswer(idx);return;}
  if(fromTimer&&raceSelected===null)return;
  if(!fromTimer&&raceSelected!==Number(idx)){chooseRaceAnswer(idx);return;}
@@ -2366,13 +2439,14 @@ async function submitRaceAnswer(idx,fromTimer=false){
  $('boatRaceStatus').textContent=correct?'Waktu habis! Benar, +20 poin untuk TIM '+team+'.':'Waktu habis. Jawaban benar: '+('ABCD'[q.correct])+'. TIM '+team+' mendapat 0 poin.';
  window.__studentAnswerLog=window.__studentAnswerLog||[];window.__studentAnswerLog.push({question:q.q||q.question||'',type:'boat-race',selected:(q.a||[])[finalIdx]||'',selectedLetter:'ABCD'[finalIdx]||'',correctAnswer:(q.a||[])[q.correct]||'',isCorrect:correct,team,points:pts,at:new Date().toISOString()});
  if(correct){try{window.xp=(window.xp||0)+20}catch(e){}}
- if(d&&room){const accountKey=studentResultKey();const ref=d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers/'+accountKey);try{await ref.set({accountKey,name:person,team,game:'Game Perahu',answer:finalIdx,selected:(q.a||[])[finalIdx]||'',question:q.q||q.question||'',correctAnswer:(q.a||[])[q.correct]||'',correct,points:pts,at:Date.now()});const all=(await d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers').once('value')).val()||{};let a=0,b=0;Object.values(all).forEach(x=>{if(x.correct){if(x.team==='A')a+=Number(x.points)||20;else if(x.team==='B')b+=Number(x.points)||20}});if($('raceScoreA'))$('raceScoreA').textContent=a;if($('raceScoreB'))$('raceScoreB').textContent=b;if($('raceProgressA'))$('raceProgressA').style.width=Math.min(100,a)+'%';if($('raceProgressB'))$('raceProgressB').style.width=Math.min(100,b)+'%';/* Skor dihitung dari jawaban Firebase secara real-time, bukan ditimpa oleh klien. */}catch(e){$('boatRaceStatus').textContent+=' Skor online belum tersimpan; periksa izin Firebase.'}}
+ if(d&&room){const accountKey=studentResultKey();const ref=d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers/'+accountKey+'_'+String(raceMatchId||'sesi').replace(/[^a-zA-Z0-9_-]/g,'_'));try{await ref.set({accountKey,name:person,team,matchId:raceMatchId,game:'Game Perahu',answer:finalIdx,selected:(q.a||[])[finalIdx]||'',question:q.q||q.question||'',correctAnswer:(q.a||[])[q.correct]||'',correct,points:pts,at:Date.now()});const all=(await d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers').once('value')).val()||{};let a=0,b=0;Object.values(all).forEach(x=>{if(x.correct&&x.matchId===raceMatchId){if(x.team==='A')a+=Number(x.points)||20;else if(x.team==='B')b+=Number(x.points)||20}});if($('raceScoreA'))$('raceScoreA').textContent=a;if($('raceScoreB'))$('raceScoreB').textContent=b;if($('raceProgressA'))$('raceProgressA').style.width=Math.min(100,a)+'%';if($('raceProgressB'))$('raceProgressB').style.width=Math.min(100,b)+'%';/* Skor dihitung dari jawaban Firebase secara real-time, bukan ditimpa oleh klien. */}catch(e){$('boatRaceStatus').textContent+=' Skor online belum tersimpan; periksa izin Firebase.'}}
  // Setelah jawaban final tersimpan, lanjutkan soal tanpa menunggu timer permainan keseluruhan.
- setTimeout(()=>{if(!$('game')?.classList.contains('hidden') && $('gameMessage')?.style.display!=='flex' && getQ()===q){if(Number(window.gameIndex||0)<(window.__gameApi?.getState?.()?.gameQuestions?.length||1)-1)window.__gameApi?.nextQuestion();else raceNotice('Semua soal selesai. Tetap di permainan sampai waktu guru habis.');}},1400);
+ setTimeout(()=>{if(!$('game')?.classList.contains('hidden') && $('gameMessage')?.style.display!=='flex' && getQ()===q){if(Number(window.gameIndex||0)<(window.__gameApi?.getState?.()?.gameQuestions?.length||1)-1)window.__gameApi?.nextQuestion();else raceFinishMatch();}},1400);
 }
+async function raceFinishMatch(){window.__boatTimerUnlocked=false;window.__boatDeadline=0;raceFinished=true;raceStarted=false;raceReady=false;stopRaceTimer();stopRaceCountdown();raceShowLobby();raceUpdateScores({});raceNotice('Selesai! Skor tim A dan B direset; riwayat jawaban tetap tersimpan di Firebase.');try{await raceMatchRef?.transaction(v=>v&&v.matchId===raceMatchId?{...v,status:'finished',finishedAt:Date.now()}:undefined)}catch(e){console.warn(e)}}
 document.addEventListener('click',e=>{if(e.target.closest('#boatReadyButton')){e.preventDefault();markRaceReady();return;}const pick=e.target.closest('[data-race-team]');if(pick){e.preventDefault();selectRaceTeam(pick.dataset.raceTeam);return;}const boat=e.target.closest('[data-race-answer]');if(boat){e.preventDefault();chooseRaceAnswer(Number(boat.dataset.raceAnswer))}},true);
 const oldStart=window.startStudentGame;
-window.startStudentGame=async function(){if(typeof oldStart==='function')oldStart();const n=($('studentName')?.value||'').trim();if(!n)return;person=n;role='student';room=roomFromForm();team='A';connectChat();setTimeout(setupBoatRace,250);};
+window.startStudentGame=async function(){if(typeof oldStart==='function')oldStart();const n=($('studentName')?.value||'').trim();if(!n)return;person=n;role='student';room=roomFromForm();team='';connectChat();setTimeout(setupBoatRace,250);};
 const oldStartOnline=window.startOnlineGame;
 document.addEventListener('click',e=>{if(e.target.closest('#teacherJoinLive')){setTimeout(()=>{role='teacher';person=window.currentTeacher?.name||'Guru';room=[ $('teacherLiveSchool')?.value||'', $('teacherLiveClass')?.value||'', $('teacherLiveCode')?.value||''].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';connectChat()},250)}},true);
 let lastRaceQuestion='';const mo=new MutationObserver(()=>{if(gameOn()&&getQ()?.type==='isian'){if(!$('boatRaceGame'))setupBoatRace();const q=getQ(),sig=String(window.gameIndex||0)+'|'+String(q?.q||q?.question||'');if(sig!==lastRaceQuestion){lastRaceQuestion=sig;if($('boatRaceGame'))renderBoatQuestion();}}if(!gameOn()&&$('boatRaceGame')){raceDisconnect();stopRaceTimer();$('boatRaceGame').remove();lastRaceQuestion='';if($('woodStream'))$('woodStream').style.display='grid';if($('woodTarget'))$('woodTarget').style.display='flex'}});
@@ -2439,6 +2513,7 @@ async function addTeacherRaceDetails(){
  detail.innerHTML='<h3>📚 Rincian Jawaban Seluruh Game ('+entries.length+')</h3>'+(entries.length?entries.map(a=>'<div style="padding:8px;border-bottom:1px solid #cbd5e1"><b>'+escSafe(a.name||'Siswa')+'</b> · '+escSafe(a.game)+' · Soal '+a.round+(a.team?' · TIM '+escSafe(a.team):'')+'<br>'+escSafe(a.question||'')+'<br>Jawaban: '+escSafe(a.selected||'—')+' · '+(a.correct?'✅ Benar':'❌ Salah')+' · '+escSafe(a.points||0)+' poin</div>').join(''):'<p>Belum ada jawaban siswa tersimpan pada ruang ini.</p>');
  }catch(e){console.warn('Gagal memuat rincian jawaban seluruh game',e);}
 }
-const teacherWatch=new MutationObserver(()=>{if($('teacherLiveResults')&&$('teacherJoinLive'))addTeacherRaceDetails()});teacherWatch.observe(document.body,{childList:true,subtree:true});setInterval(()=>{if($('teacherLiveResults')&&$('teacherJoinLive')&&!$('teacherScreen')?.classList.contains('hidden')){const d=$('teacherLiveResults');if(d)d.dataset.raceDetails='';addTeacherRaceDetails();}},5000);
+// Rincian hasil ditampilkan oleh listener Firebase pada ruang guru; tanpa polling DOM.
+
 })();
 </script>
