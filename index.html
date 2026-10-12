@@ -706,7 +706,7 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
     <div><label>Waktu Pengerjaan (menit)</label><input id="qDuration" type="number" min="1" max="180" value="10" placeholder="Contoh: 10"></div>
     <div class="notice" style="margin:0;align-self:end">⏱️ Waktu berlaku untuk seluruh soal dengan kode yang sama. Timer siswa akan berjalan mundur.</div>
    </div>
-   <div class="formGrid"><div><label>Bentuk Soal</label><select id="qType" onchange="updateQuestionTypeUI()"><option value="pg">Pilihan ganda — Balon Udara</option><option value="isian">Isian — Game Memukul Kayu</option><option value="icebreak">Ice Breaking — Pecahkan Balon Warna</option></select></div><div><label>Petunjuk Gerakan (khusus meloncat)</label><input id="qPoseCorrect" placeholder="Contoh: pose jempol jika benar"></div></div>
+   <div class="formGrid"><div><label>Bentuk Soal</label><select id="qType" onchange="updateQuestionTypeUI()"><option value="pg">Pilihan ganda — Balon Udara</option><option value="isian">Isian — Game Memukul Kayu</option><option value="icebreak">Ice Breaking — Pecahkan Balon Warna</option></select></div></div>
     <div id="questionTextField"><label>Pertanyaan</label><input id="qText" placeholder="Tuliskan pertanyaan"></div>
     <div id="qShortAnswerFields" class="hidden"><label>Kunci Jawaban Isian / Essay</label><input id="qExpected" placeholder="Jawaban acuan untuk diperiksa otomatis"></div>
     <div id="qPoseWrongField" class="hidden"><label>Gerakan jika jawaban salah (khusus meloncat)</label><input id="qPoseWrong" placeholder="Contoh: pose wajah bingung"></div>
@@ -734,7 +734,7 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
 <section id="studentSetup" class="screen center hidden">
  <div class="setupCard glass">
   <h1>🎮 Siap Bermain?</h1><p class="small">Cari nama sekolah, pilih kelas, lalu ketik <b>kode soal yang diberikan guru</b>. Kode dari sekolah lain tidak ditampilkan.</p>
-  <label>Nama Siswa (opsional)</label><input id="studentName" placeholder="Nama kamu">
+  <label>Nama Siswa atau Kelompok (wajib)</label><input id="studentName" placeholder="Nama kamu atau kelompok" required maxlength="80">
   <label>Cari Nama Sekolah</label><input id="schoolSearch" placeholder="🔎 Ketik nama sekolah..." oninput="filterStudentSchools()">
   <label>Nama Sekolah</label><select id="studentSchool" onchange="refreshStudentCodes()"></select>
   <div class="formGrid">
@@ -1133,7 +1133,7 @@ function loadTeacher(){
 window.updateQuestionTypeUI=()=>{
  const t=$('qType').value,ice=t==='icebreak';
  $('qChoiceFields').classList.toggle('hidden',ice);$('correctAnswerField').classList.toggle('hidden',ice);
- $('questionTextField').classList.toggle('hidden',ice);$('qShortAnswerFields').classList.toggle('hidden',t==='pg'||ice);$('qPoseWrongField').classList.add('hidden');$('qPoseCorrect').parentElement?.classList.toggle('hidden',ice);
+ $('questionTextField').classList.toggle('hidden',ice);$('qShortAnswerFields').classList.toggle('hidden',t==='pg'||ice);$('qPoseWrongField').classList.add('hidden');$('qPoseCorrect').parentElement?.classList.toggle('hidden',ice);$('qPoseCorrect').parentElement?.classList.add('hidden');
  ['qa','qb','qc','qd'].forEach(id=>$(id).required=!ice);$('qText').required=!ice;
  $('qSubject').placeholder=ice?'Nama kegiatan, mis. Ice Breaking Ceria':'Matematika';
 };
@@ -1189,8 +1189,8 @@ window.startStudentGame=()=>{
  if(ice)gameQuestions=[{...ice,type:'icebreak',q:'🎈 ICE BREAKING: Pecahkan balon sesuai petunjuk warna!',a:[],duration:ice.duration||5}];
  else {gameQuestions=pool.filter(q=>q.className===cls);if(!gameQuestions.length)gameQuestions=pool;}
  if(!gameQuestions.length)return alert('Kode tidak cocok atau bukan milik sekolah yang dipilih.');
- window.__gameResultSavedForRun=false;activeIceBreak=ice||null;icePopped=0;gameQuestions=[...gameQuestions].sort(()=>Math.random()-.5);gameIndex=0;xp=0;streak=0;selecting=false;gameHasStarted=false;
- gameDurationMinutes=Math.max(1,Math.min(180,Number(gameQuestions[0].duration)||10));gameTimeLeft=gameDurationMinutes*60;handDetected=false;handLocked=false;initialActivationPending=false;cancelFiveSecondCountdown();updateHud();updateTimerDisplay();show('game');renderGameQuestion();showHandGate();handLocked=true;initialActivationPending=false;startCameraStatusWaiting();
+ window.__gameResultSavedForRun=false;window.__studentAnswerLog=[];activeIceBreak=ice||null;icePopped=0;gameQuestions=[...gameQuestions].sort(()=>Math.random()-.5);gameIndex=0;xp=0;streak=0;selecting=false;gameHasStarted=false;
+ gameDurationMinutes=Math.max(1,Math.min(180,Number(gameQuestions[0].duration)||10));gameTimeLeft=gameDurationMinutes*60;handDetected=false;handLocked=false;initialActivationPending=false;cancelFiveSecondCountdown();updateHud();updateTimerDisplay();show('game');renderGameQuestion();handDetected=true;handLocked=false;initialActivationPending=false;gameHasStarted=true;const gate=$('handGate');if(gate)gate.classList.add('hiddenGate');const sc=$('startCountdown');if(sc)sc.classList.remove('active');$('gameStatus').textContent='🟢 '+(($('studentName').value||'Siswa').trim())+' · Klik atau sentuh jawaban untuk bermain';startGameTimer();startBombRain();
 }
 
 function renderGameQuestion(){
@@ -1220,10 +1220,10 @@ function renderGameQuestion(){
   if(!essay){
    const nums=[1,2,3,4].sort(()=>Math.random()-.5);window.clapChoiceMap={};
    (q.a||[]).forEach((a,i)=>window.clapChoiceMap[nums[i]]=i);
-   $('poseChoices').innerHTML=`<div id="woodRiver"><div class="woodWater"></div><div id="woodStream">${(q.a||[]).map((a,i)=>`<div class="floatingLog" data-hits="${nums[i]}"><b>${nums[i]} pukulan</b><span>${'ABCD'[i]}. ${esc(a)}</span></div>`).join('')}</div><div id="woodTarget" aria-label="Kayu untuk dipukul">🪵<small>PUKUL DI SINI</small></div></div>`;
+   $('poseChoices').innerHTML=`<div id="woodRiver"><div class="woodWater"></div><div class="teamRace"><div class="teamBoat" id="boatA"><b>🚣 TIM A</b><span id="teamAScore">0 poin</span><div class="boatHull">⛵</div></div><div class="teamBoat" id="boatB"><b>🚣 TIM B</b><span id="teamBScore">0 poin</span><div class="boatHull">⛵</div></div></div><div class="teamPicker"><button type="button" class="teamPick active" data-team="A">Pilih TIM A</button><button type="button" class="teamPick" data-team="B">Pilih TIM B</button></div><div id="woodStream">${(q.a||[]).map((a,i)=>`<button type="button" class="floatingLog" data-hits="${nums[i]}" data-answer="${i}"><b>PILIHAN ${'ABCD'[i]}</b><span>${esc(a)}</span></button>`).join('')}</div><div id="woodTarget" role="button" tabindex="0" aria-label="Pukul kayu untuk memilih jawaban">🪵<small>PUKUL / SENTUH KAYU</small></div><div id="woodRaceStatus">Pilih TIM A atau TIM B, lalu pilih jawaban. Kedua tim berlomba mendapatkan poin.</div></div>`;
    clapCount=0;window.woodArmed=true;window.woodLastHit=0;window.woodPrevY=null;
-   $('clapStage').textContent='⏱️ 30 detik • 🪵 Pukulan: 0';
-   $('poseInstruction').textContent='Gerakkan tangan turun ke kayu tengah. Ulangi untuk mengubah pilihan sebelum 30 detik habis.';
+   $('clapStage').textContent='⏱️ 20 detik • 🪵 Pilih jawaban tim sebelum waktu habis';
+   $('poseInstruction').textContent='Gerakkan tangan turun ke kayu tengah. Ulangi untuk mengubah pilihan sebelum 20 detik habis.';
   } else {
    const shuffled=[0,1,2,3].sort(()=>Math.random()-.5);window.jumpChoiceMap={};shuffled.forEach((idx,zone)=>window.jumpChoiceMap[zone]=idx);
    $('poseChoices').innerHTML=`<div class="jumpChoiceGrid">${shuffled.map((idx,zone)=>`<div class="jumpChoice" data-zone="${zone}" style="padding:12px;border-radius:12px;background:#164e63;border:2px solid #67e8f9"><b>➡️ Zona ${zone+1} • Pilihan ${'ABCD'[idx]}</b><div>${esc((q.a||[])[idx]||'')}</div></div>`).join('')}</div>`;
@@ -1247,7 +1247,7 @@ window.submitWrittenAnswer=()=>{
  if(q.type==='essay'){ $('poseInstruction').textContent='🚶 Kamera aktif. Bergerak ke zona jawaban; tidak perlu meloncat.';return; }
 };
 function stopClapListener(){clapArmed=false;if(clapRAF)cancelAnimationFrame(clapRAF);clapRAF=0;if(clapStream){clapStream.getTracks().forEach(t=>t.stop());clapStream=null}if(clapAudioContext){clapAudioContext.close().catch(()=>{});clapAudioContext=null}clapAnalyser=null;}
-function evaluateChoice(idx,q){const correct=Number(idx)===Number(q.correct),letter='ABCD'[idx]||'—',answer=(q.a||[])[idx]||'Tidak ada pilihan yang sesuai';$('poseChoices').innerHTML+=`<div style="margin-top:10px;font-size:22px;font-weight:900">${correct?'✅':'❌'} Pilihan ${letter}: ${esc(answer)}</div>`;if(q.type==='essay')$('bodyPoseStatus').textContent=`Pose berhasil memilih jawaban ${letter}.`;writtenResult(correct,{...q,expected:(q.a||[])[q.correct]||q.expected});}
+function evaluateChoice(idx,q){const correct=Number(idx)===Number(q.correct),letter='ABCD'[idx]||'—',answer=(q.a||[])[idx]||'Tidak ada pilihan yang sesuai';window.__studentAnswerLog=window.__studentAnswerLog||[];window.__studentAnswerLog.push({question:q.q||'',type:q.type||'pg',selected:answer,selectedLetter:letter,correctAnswer:(q.a||[])[q.correct]||q.expected||'',isCorrect:correct,at:new Date().toISOString()});$('poseChoices').innerHTML+=`<div style="margin-top:10px;font-size:22px;font-weight:900">${correct?'✅':'❌'} Pilihan ${letter}: ${esc(answer)}</div>`;if(q.type==='essay')$('bodyPoseStatus').textContent=`Pose berhasil memilih jawaban ${letter}.`;writtenResult(correct,{...q,expected:(q.a||[])[q.correct]||q.expected});}
 function writtenResult(correct,q){if(correct){xp+=20;streak++;updateHud();showResult('🎉','BENAR!',`Mantap! Jawabanmu tepat. +20 XP`,true);confetti()}else{streak=0;updateHud();showResult('🤪','BELUM TEPAT',`Jawaban benar: <b>${esc((q.a||[])[q.correct]||q.expected)}</b>. Coba lagi di soal berikutnya!`,false)}}
 function updateTimerDisplay(){
  const total=Math.max(0,Math.floor(gameTimeLeft)),m=Math.floor(total/60),s=total%60;
@@ -1266,7 +1266,7 @@ function startGameTimer(){
 function stopGameTimer(){if(gameTimer){clearInterval(gameTimer);gameTimer=null}}
 function choose(b){
  if((gameQuestions[gameIndex]?.type||'pg')!=='pg')return;
- if(selecting)return;selecting=true;b.classList.add('locked');const q=gameQuestions[gameIndex],idx=Number(b.dataset.index);
+ if(selecting)return;selecting=true;b.classList.add('locked');const q=gameQuestions[gameIndex],idx=Number(b.dataset.index);window.__studentAnswerLog=window.__studentAnswerLog||[];window.__studentAnswerLog.push({question:q.q||'',type:q.type||'pg',selected:(q.a||[])[idx]||'',selectedLetter:'ABCD'[idx]||'',correctAnswer:(q.a||[])[q.correct]||'',isCorrect:Number(idx)===Number(q.correct),at:new Date().toISOString()});
  if(idx===q.correct){xp+=20;streak++;updateHud();showResult('🎉','BENAR!',`Mantap! +20 XP${streak>1?' • Streak '+streak+' 🔥':''}`,true);confetti()}
  else{streak=0;updateHud();showResult('🤪','UPS, BELUM TEPAT!',`Hehe 😜 Jawaban yang benar: <b>${esc(q.a[q.correct])}</b>. Coba lagi di soal berikutnya!`,false)}
 }
@@ -1276,10 +1276,11 @@ $('nextBtn').onclick=()=>{
  if(gameIndex<gameQuestions.length-1){gameIndex++;renderGameQuestion();handDetected=false;handLocked=false;initialActivationPending=false;cancelFiveSecondCountdown();hideHandGate()}else finishGame();
 };
 function saveGameResult(gameType,completed){
- const record={id:uid(),student:($('studentName').value||'Siswa'),school:$('studentSchool')?.value||'',className:$('studentClass')?.value||'',code:gameQuestions[0]?.code||'',type:gameType,score:xp,balloonsPopped:icePopped,completed:!!completed,createdAt:new Date().toISOString()};
+ const record={id:uid(),student:($('studentName').value||'Siswa'),school:$('studentSchool')?.value||'',className:$('studentClass')?.value||'',code:gameQuestions[0]?.code||'',type:gameType,score:xp,answers:window.__studentAnswerLog||[],teamScores:window.__woodTeamScores||{},balloonsPopped:icePopped,completed:!!completed,createdAt:new Date().toISOString()};
  gameResults.push(record);
  // Hasil disimpan di localStorage browser ini.
  set(K.results,gameResults);
+ try{const db=window.firebaseDB;const school=$('studentSchool')?.value||'',cls=$('studentClass')?.value||'',code=($('studentCode')?.value||'').trim().toUpperCase();const room=[school,cls,code].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';if(db)db.ref('pgroRantingDua/liveRooms/'+room+'/results').push(record).catch(()=>{});}catch(_e){}
  return record;
 }
 function renderGameResults(){ /* Hasil permainan tersimpan di Firebase dan cache lokal. */ }
@@ -1460,15 +1461,18 @@ async function startCamera(){
 function rHandsCountLabel(){const n=window.detectedHandCount||0;return n>=2?'2 tangan terlihat':'1 tangan terlihat';}
 function startClapRoundCountdown(q){
  if(!q||q.type!=='isian'||selecting||!gameHasStarted||handLocked)return;
+ if(typeof window.__woodRaceReset==='function')window.__woodRaceReset();
  if(clapQuestionTimer)clearInterval(clapQuestionTimer);
- clapSecondsLeft=30;clapCount=0;window.woodArmed=true;window.woodPrevY=null;
- $('clapStage').textContent='⏱️ 30 detik • 🪵 Pukulan: 0';
+ clapSecondsLeft=20;clapCount=0;window.woodArmed=true;window.woodPrevY=null;
+ $('clapStage').textContent='⏱️ 20 detik • 🪵 Pilih jawaban tim sebelum waktu habis';
  clapQuestionTimer=setInterval(()=>{
   if(selecting||$('gameMessage').style.display==='flex'){clearInterval(clapQuestionTimer);clapQuestionTimer=null;return;}
   clapSecondsLeft=Math.max(0,clapSecondsLeft-1);
   $('clapStage').textContent=`⏱️ ${clapSecondsLeft} detik • 🪵 Pukulan: ${clapCount}`;
   if(clapSecondsLeft>0)return;
-  clearInterval(clapQuestionTimer);clapQuestionTimer=null;selecting=true;
+  clearInterval(clapQuestionTimer);clapQuestionTimer=null;
+  if(typeof window.__woodRaceResolve==='function'){const raceIdx=window.__woodRaceResolve(q);selecting=true;$('poseInstruction').textContent='🔒 Jawaban dikunci setelah 20 detik.';evaluateChoice(Number.isInteger(raceIdx)?raceIdx:-1,q);return;}
+  selecting=true;
   const idx=window.clapChoiceMap?.[clapCount];
   $('poseInstruction').textContent=`🔒 Jawaban dikunci: ${clapCount} pukulan.`;
   evaluateChoice(Number.isInteger(idx)?idx:-1,q);
@@ -1840,11 +1844,415 @@ window.exitGame=()=>{$('gameMessage').style.display='none';$('iceBreakLayer').cl
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function attr(s){return esc(s).replace(/"/g,'&quot;')}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('loginModal').classList.add('hidden');if(!$('game').classList.contains('hidden'))exitGame()}});
+
+// Kontrol kayu tanpa kamera: klik mouse atau sentuh layar.
+document.addEventListener('click',function(ev){
+ const target=ev.target.closest('#woodTarget');if(!target||!gameHasStarted||handLocked||selecting)return;
+ ev.preventDefault();
+ clapCount=clapCount%4+1;
+ $('clapStage').textContent=`⏱️ ${clapSecondsLeft} detik • 🪵 Pukulan: ${clapCount}`;
+ target.classList.remove('woodHit');void target.offsetWidth;target.classList.add('woodHit');
+ document.querySelectorAll('.floatingLog').forEach(el=>el.classList.toggle('woodSelected',Number(el.dataset.hits)===clapCount));
+ $('poseInstruction').textContent=`Pilihan ${clapCount} pukulan aktif. Ketuk kayu lagi untuk mengubah pilihan.`;
+ if(clapCount===4){/* pilihan keempat tetap bisa diubah sebelum waktu habis */}
+});
+document.addEventListener('keydown',function(ev){
+ if(['1','2','3','4'].includes(ev.key)&&!$('game').classList.contains('hidden')){
+  const n=Number(ev.key),logs=[...document.querySelectorAll('.floatingLog')];
+  if(logs.length){clapCount=n;logs.forEach(el=>el.classList.toggle('woodSelected',Number(el.dataset.hits)===n));}
+ }
+});
+document.addEventListener('touchstart',function(ev){if(ev.target.closest('#woodTarget'))ev.preventDefault()},{passive:false});
+// Public wrappers used by mouse/touch controls added below; these retain access to game state.
+window.__gameApi={
+ chooseBalloon:(idx)=>{const b=[...document.querySelectorAll('.answerBalloon')].find(x=>Number(x.dataset.index)===Number(idx));if(b)choose(b)},
+ evaluate:(idx,q)=>evaluateChoice(idx,q),
+ getQuestion:()=>gameQuestions[gameIndex],
+ getState:()=>({gameIndex,gameQuestions,gameHasStarted,selecting,clapSecondsLeft,clapCount,xp,icePopped}),
+ setWoodChoice:(idx)=>{clapCount=Number(idx);window.clapCount=clapCount;document.querySelectorAll('.floatingLog').forEach(el=>el.classList.toggle('woodSelected',Number(el.dataset.hits)===clapCount));$('clapStage').textContent=`⏱️ ${Math.max(0,clapSecondsLeft)} detik • Pilihan: ${clapCount}`;},
+ setWoodAnswer:(answerIdx)=>{const hit=Object.keys(window.clapChoiceMap||{}).find(k=>Number(window.clapChoiceMap[k])===Number(answerIdx));if(hit!==undefined){clapCount=Number(hit);window.clapCount=clapCount;}return clapCount;},
+ resolveIceBalloon:(balloon)=>{if(!balloon||balloon.classList.contains('popped')||selecting)return;const wanted=(window.iceTargetColors||[]).includes(balloon.dataset.color);balloon.classList.add('popped');const rect=balloon.getBoundingClientRect(),burst=document.createElement('div');burst.className='iceBurst';burst.textContent='💥✨';burst.style.left=(rect.left+rect.width/2)+'px';burst.style.top=(rect.top+rect.height/2)+'px';$('iceBreakLayer').appendChild(burst);setTimeout(()=>burst.remove(),450);if(wanted){icePopped++;xp+=10;$('gameStatus').textContent='✅ Warna tepat! +10 poin. Balon target: '+icePopped;}else{xp=Math.max(0,xp-5);$('gameStatus').textContent='❌ Bukan warna target: -5 poin.';}updateHud();setTimeout(()=>balloon.remove(),320);const remain=[...document.querySelectorAll('#iceBreakLayer .iceBalloon:not(.popped)')].filter(b=>(window.iceTargetColors||[]).includes(b.dataset.color));if(!remain.length){selecting=true;stopGameTimer();saveGameResult('icebreak',true);showResult('🎉','ICE BREAKING SELESAI',`Skor ${xp} poin. Balon target yang dipecahkan: ${icePopped}.`,true);}},
+ getRoomResults:()=>gameResults,
+};
 resizeHandCanvas();
 loadStudentSetup();
 updateQuestionTypeUI();
 })();
 
 </script>
+
+<style>
+/* Patch akses lintas perangkat, kelas online, chat, dan kontrol sentuh */
+#woodTarget{pointer-events:auto!important;cursor:pointer;touch-action:manipulation;border-radius:12px!important;
+ background:repeating-linear-gradient(90deg,#75421f 0 12px,#a66a37 12px 17px,#633719 17px 20px)!important;
+ border:7px solid #4b2b17!important;box-shadow:inset 0 0 0 2px #d7a16a,inset 0 -12px 18px #32190c,0 12px 0 #43220f,0 18px 22px #002c4c88!important}
+#woodTarget:after{content:"";position:absolute;inset:12px;border:2px solid #d5a06a88;border-radius:8px;pointer-events:none}
+#woodTarget small{position:relative;z-index:1;background:#4a2a17d9;padding:4px 7px;border-radius:6px}
+#onlineDock{position:fixed;right:12px;bottom:12px;width:min(350px,calc(100vw - 24px));max-height:54vh;z-index:900;background:#071a36f5;border:1px solid #55dfff;border-radius:16px;box-shadow:0 12px 36px #0007;display:flex;flex-direction:column;color:white}
+#onlineDock header{padding:10px 12px;background:#123d69;border-radius:15px 15px 0 0;display:flex;gap:8px;align-items:center}
+#onlineDock header b{flex:1}#onlineMessages{padding:10px;overflow:auto;min-height:80px;max-height:30vh;font-size:13px}
+.onlineMsg{padding:7px 9px;margin:5px 0;background:#ffffff12;border-radius:9px;overflow-wrap:anywhere}
+#onlineDock form{display:flex;gap:6px;padding:8px}#onlineDock form input{min-width:0;flex:1;padding:9px}
+#teacherLivePanel{margin-top:16px}.livePlayer{padding:10px;margin:6px 0;border-radius:10px;background:#ffffff12}
+@media(max-width:600px){#onlineDock{max-height:45vh;bottom:6px;right:6px;width:calc(100vw - 12px)}#onlineMessages{max-height:20vh}}
+</style>
+<script>
+(function(){
+'use strict';
+const $id=id=>document.getElementById(id);
+let onlineRoom=null,onlineListeners=[],onlineRole='student',onlineUser='',onlineChatReady=false;
+function roomKey(){const raw=(onlineRole==='teacher'?[window.__onlineSchool||'',window.__onlineClass||'',window.__onlineCode||'']:[$id('studentSchool')?.value||'', $id('studentClass')?.value||'', $id('studentCode')?.value||'']).join('|').toLowerCase();return raw.replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';}
+function db(){return window.firebaseDB||null}
+function stopOnline(){const d=db();if(d&&onlineRoom)onlineListeners.forEach(([path,fn])=>d.ref(path).off('value',fn));onlineListeners=[];onlineChatReady=false}
+function watch(path,fn){const d=db();if(!d)return;d.ref(path).on('value',fn);onlineListeners.push([path,fn])}
+function ensureDock(){
+ let dock=$id('onlineDock');if(dock)return dock;
+ dock=document.createElement('section');dock.id='onlineDock';dock.innerHTML='<header><b>💬 Kelas Online <small id="onlineCount"></small></b><button type="button" class="ghost" id="onlineToggle" style="padding:5px 8px">Sembunyikan</button></header><div id="onlineMessages" aria-live="polite"></div><form id="onlineChatForm"><input id="onlineChatInput" maxlength="400" placeholder="Tulis pesan..." autocomplete="off" required><button class="primary" type="submit">Kirim</button></form>';
+ document.body.appendChild(dock);
+ $id('onlineToggle').onclick=()=>{const m=$id('onlineMessages'),f=$id('onlineChatForm'),hide=m.style.display!=='none';m.style.display=hide?'none':'block';f.style.display=hide?'none':'flex';$id('onlineToggle').textContent=hide?'Buka':'Sembunyikan'};
+ $id('onlineChatForm').onsubmit=e=>{e.preventDefault();const text=$id('onlineChatInput').value.trim(),d=db();if(!text||!d||!onlineRoom)return;if(!onlineChatReady){alert('Menunggu koneksi Firebase.');return}d.ref('pgroRantingDua/liveRooms/'+onlineRoom+'/chat').push({name:onlineUser||'Pengguna',role:onlineRole,text:text.slice(0,400),at:Date.now()}).then(()=>$id('onlineChatInput').value='').catch(()=>alert('Pesan belum terkirim. Periksa koneksi dan Firebase Rules.'))};
+ return dock;
+}
+function startOnline(role,user){
+ stopOnline();onlineRole=role;onlineUser=user||'Siswa';onlineRoom=roomKey();ensureDock();
+ const d=db();if(!d){$id('onlineMessages').innerHTML='<div class="onlineMsg">Chat online memerlukan koneksi Firebase.</div>';return}
+ const base='pgroRantingDua/liveRooms/'+onlineRoom;onlineChatReady=true;
+ if(role==='student'){
+   const session={name:onlineUser,role:'student',school:$id('studentSchool')?.value||'',className:$id('studentClass')?.value||'',code:$id('studentCode')?.value.trim().toUpperCase()||'',lastSeen:Date.now(),score:0,status:'Bermain'};
+   d.ref(base+'/players/'+encodeURIComponent(onlineUser)).set(session).catch(()=>{});
+   d.ref(base+'/players/'+encodeURIComponent(onlineUser)).onDisconnect().update({status:'Offline',lastSeen:Date.now()}).catch(()=>{});
+   window.__onlineSessionRef=base+'/players/'+encodeURIComponent(onlineUser);
+ } else window.__onlineSessionRef=null;
+ watch(base+'/chat',snap=>{
+   const msgs=Object.entries(snap.val()||{}).sort((a,b)=>(a[1].at||0)-(b[1].at||0)).slice(-80);
+   $id('onlineMessages').innerHTML=msgs.map(([k,m])=>'<div class="onlineMsg"><b>'+esc(m.name||'Pengguna')+'</b> <small>· '+esc(m.role==='teacher'?'Guru':'Siswa')+'</small><br>'+esc(m.text||'')+'</div>').join('')||'<div class="small">Belum ada pesan. Mulai menyapa!</div>';
+   $id('onlineMessages').scrollTop=$id('onlineMessages').scrollHeight;
+ });
+ watch(base+'/players',snap=>{
+   const players=Object.values(snap.val()||{}).filter(p=>p.status!=='Offline');
+   if($id('onlineCount'))$id('onlineCount').textContent='· '+players.length+' online';
+   const panel=$id('teacherLivePanel');if(panel&&onlineRole==='teacher')panel.innerHTML='<h3>🟢 Siswa yang sedang bermain ('+players.length+')</h3>'+(players.map(p=>'<div class="livePlayer"><b>'+esc(p.name)+'</b> · '+esc(p.className||'')+'<br><small>'+esc(p.status||'Bermain')+' · '+esc(p.school||'')+'</small></div>').join('')||'<p class="small">Belum ada siswa aktif di ruang kode ini.</p>');
+ });
+}
+function ensureTeacherPanel(){
+ const screen=$id('teacherScreen');if(!screen||$id('teacherLivePanel'))return;
+ const panel=document.createElement('div');panel.id='teacherLivePanel';panel.className='card';
+ panel.innerHTML='<h3>🎮 Pantau Game Siswa</h3><p class="small">Masukkan sekolah, kelas, dan kode soal yang dibagikan kepada siswa untuk bergabung ke ruang game, melihat siswa online, hasil, dan chat.</p><div><label>Nama sekolah</label><input id="teacherLiveSchool" placeholder="Nama sekolah sesuai data guru"></div><div class="formGrid"><div><label>Kelas</label><input id="teacherLiveClass" placeholder="Contoh: 4A"></div><div><label>Kode soal</label><input id="teacherLiveCode" placeholder="Kode dari guru"></div></div><div class="actions"><button type="button" class="primary" id="teacherJoinLive">Masuk Ruang Game</button></div><div class="actions"><button type="button" class="good" id="downloadGameResults">⬇️ Download Jawaban Siswa (CSV)</button><button type="button" class="danger" id="deleteGameResults">🗑️ Hapus Jawaban Siswa</button></div><div id="teacherLiveResults"></div>';
+ const content=screen.querySelector('.content');if(content)content.appendChild(panel);
+ $id('teacherJoinLive').onclick=()=>{
+   const cls=$id('teacherLiveClass').value.trim(),code=$id('teacherLiveCode').value.trim().toUpperCase();
+   if(!code){alert('Masukkan kode soal.');return}window.__onlineSchool=$id('teacherLiveSchool').value.trim();if(!window.__onlineSchool){alert('Masukkan nama sekolah sesuai data siswa.');return}
+   window.__onlineClass=cls||window.currentTeacher?.className||'';
+   window.__onlineCode=code;
+   startOnline('teacher',(window.currentTeacher&&window.currentTeacher.name)||'Guru');
+   const d=db();if(d){const key=roomKey();d.ref('pgroRantingDua/liveRooms/'+key+'/results').on('value',snap=>{
+     const vals=Object.values(snap.val()||{});window.__teacherLiveResultRows=vals;$id('teacherLiveResults').innerHTML='<h3>📊 Hasil permainan ('+vals.length+')</h3>'+(vals.map(r=>'<div class="livePlayer"><b>'+esc(r.student||r.name||'Siswa')+'</b> · Skor: '+esc(r.score??0)+'<br><small>'+esc(r.createdAt||'')+'</small></div>').join('')||'<p class="small">Hasil akan muncul saat siswa selesai bermain.</p>');
+   });}
+ };
+}
+const oldStart=window.startStudentGame;
+window.startStudentGame=function(){
+ const name=($id('studentName')?.value||'').trim();
+ if(!name){alert('Tuliskan nama siswa atau nama kelompok sebelum bermain.');$id('studentName')?.focus();return}
+ if(typeof oldStart!=='function')return;
+ oldStart();
+ if(!$id('game')||$id('game').classList.contains('hidden'))return;
+ // Kamera tetap dicoba oleh mode game; klik/sentuhan tetap berfungsi bila kamera tidak tersedia.
+ window.handDetected=true;try{window.startCamera?.()}catch(e){}window.handLocked=false;window.initialActivationPending=false;window.gameHasStarted=true;
+ const gate=$id('handGate');if(gate)gate.classList.add('hiddenGate');
+ const countdown=$id('startCountdown');if(countdown)countdown.classList.remove('active');
+ const status=$id('gameStatus');if(status)status.textContent='🟢 '+name+' · Klik atau sentuh jawaban untuk bermain';
+ startOnline('student',name);
+ try{window.startGameTimer?.();window.startBombRain?.()}catch(e){}
+};
+document.addEventListener('click',e=>{
+ const target=e.target.closest('#woodTarget');if(!target)return;
+ e.preventDefault();
+ if(!window.gameHasStarted||window.handLocked||window.selecting)return;
+ window.clapCount=(window.clapCount||0)%4+1;
+ const count=window.clapCount;
+ const stage=$id('clapStage');if(stage)stage.textContent='🪵 Pukulan: '+count;
+ target.classList.remove('woodHit');void target.offsetWidth;target.classList.add('woodHit');
+ document.querySelectorAll('.floatingLog').forEach(el=>el.classList.toggle('woodSelected',Number(el.dataset.hits)===count));
+ const q=window.gameQuestions?.[window.gameIndex];if(q&&typeof window.evaluateChoice==='function'){}
+ const instruction=$id('poseInstruction');if(instruction)instruction.textContent='Pilihan '+count+' pukulan aktif. Ketuk kayu lagi untuk mengubah pilihan.';
+});
+document.addEventListener('touchstart',e=>{if(e.target.closest('#woodTarget'))e.preventDefault()},{passive:false});
+const oldSave=window.saveGameResult;
+window.saveGameResult=function(type,completed){
+ let rec;try{rec=oldSave?.(type,completed)}catch(e){}
+ const d=db();if(d&&onlineRoom&&rec){d.ref('pgroRantingDua/liveRooms/'+onlineRoom+'/results').push(rec).catch(()=>{});if(window.__onlineSessionRef)d.ref(window.__onlineSessionRef).update({score:rec.score||0,status:completed?'Selesai':'Berakhir',lastSeen:Date.now()}).catch(()=>{})}
+ return rec;
+};
+const oldFinish=window.finishGame;
+window.finishGame=function(timeUp){try{if(window.__onlineSessionRef&&db())db().ref(window.__onlineSessionRef).update({status:'Selesai',lastSeen:Date.now()})}catch(e){}return oldFinish?.(timeUp)};
+const observer=new MutationObserver(()=>{if(!$id('teacherScreen')?.classList.contains('hidden'))ensureTeacherPanel()});
+observer.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
+document.addEventListener('DOMContentLoaded',ensureTeacherPanel);
+setTimeout(ensureTeacherPanel,1200);
+})();
+</script>
+
+
+<style>
+/* Game fixes: visible clickable balloons, boat race, team score, target-color balloon game */
+#playfield{z-index:10;pointer-events:auto!important}
+.answerBalloon{z-index:30!important;pointer-events:auto!important;cursor:pointer!important;touch-action:manipulation!important;isolation:isolate}
+.answerBalloon .basket{pointer-events:none}
+#iceBreakLayer{z-index:25;pointer-events:none}
+#iceBreakLayer .iceBalloon{pointer-events:auto!important;cursor:pointer!important;touch-action:manipulation!important;z-index:30}
+#woodRiver{position:relative;overflow:hidden;padding:14px;border-radius:18px;background:linear-gradient(#80d8ef 0 18%,#2199d0 18% 100%);min-height:350px}
+.woodWater{opacity:.5;pointer-events:none}
+.teamRace{display:grid;grid-template-columns:1fr 1fr;gap:12px;position:relative;z-index:2;margin-bottom:12px}
+.teamBoat{padding:10px;text-align:center;border:3px solid #eafaff;border-radius:14px;background:#075985;color:#fff;display:flex;flex-direction:column;gap:4px;align-items:center;transition:transform .2s,outline .2s}
+.teamBoat.active{outline:5px solid #ffe45e;transform:translateY(-4px)}
+.boatHull{font-size:42px;filter:drop-shadow(0 4px 2px #00344d66)}
+.teamPicker{display:flex;justify-content:center;gap:10px;position:relative;z-index:3;margin:8px 0}
+.teamPick{border:2px solid white;border-radius:12px;background:#164e63;color:white;font-weight:900;padding:10px 18px;cursor:pointer;touch-action:manipulation}
+.teamPick.active{background:#facc15;color:#422006;border-color:#92400e}
+#woodStream{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;position:relative;z-index:3}
+.floatingLog{min-width:0;width:100%;min-height:70px;border-radius:14px!important;border:4px solid #633719!important;background:repeating-linear-gradient(90deg,#75421f 0 12px,#b57a43 12px 18px,#633719 18px 22px)!important;color:white!important;text-shadow:0 1px 3px #000;padding:9px;display:flex;gap:4px;flex-direction:column;align-items:center;justify-content:center;pointer-events:auto!important;touch-action:manipulation!important;cursor:pointer!important}
+.floatingLog.woodSelected{outline:5px solid #ffe45e;filter:brightness(1.22)}
+#woodTarget{position:relative!important;display:flex!important;align-items:center;justify-content:center;gap:10px;margin:12px auto 0;width:min(100%,380px);height:74px;font-size:32px;color:#fff;touch-action:manipulation;cursor:pointer;pointer-events:auto!important}
+#woodTarget small{font-size:12px}
+#woodRaceStatus{text-align:center;color:white;font-weight:800;margin:8px 0 0;position:relative;z-index:2}
+@media(max-width:600px){#woodRiver{padding:8px}.teamBoat{padding:6px}.boatHull{font-size:30px}.floatingLog{font-size:13px;min-height:76px;padding:6px}#woodTarget{height:65px}}
+</style>
+<script>
+(function(){
+ const $=id=>document.getElementById(id);
+ let activeTeam='A',teamAnswers={A:null,B:null},teamScores={A:0,B:0},lastWoodHit=0;
+ const visibleGame=()=>{const g=$('game');return !!g&&!g.classList.contains('hidden')&&$('gameMessage')?.style.display!=='flex'};
+ function updateTeamUI(){document.querySelectorAll('.teamPick').forEach(b=>b.classList.toggle('active',b.dataset.team===activeTeam));['A','B'].forEach(t=>{const boat=$('boat'+t);if(boat)boat.classList.toggle('active',t===activeTeam);const score=$('team'+t+'Score');if(score)score.textContent=teamScores[t]+' poin'});}
+ function selectTeam(t){activeTeam=t;updateTeamUI();const st=$('woodRaceStatus');if(st)st.textContent='TIM '+t+' aktif. Pilih jawaban dengan mengetuk pilihan atau memukul kayu.';}
+ function chooseWoodAnswer(idx){if(!visibleGame()||!window.__gameApi)return;const q=window.__gameApi.getQuestion();if(!q||q.type!=='isian'||$('gameMessage')?.style.display==='flex')return;teamAnswers[activeTeam]=Number(idx);window.__gameApi?.setWoodAnswer(Number(idx));const selected=document.querySelector('.floatingLog[data-answer="'+idx+'"]');document.querySelectorAll('.floatingLog').forEach(el=>el.classList.toggle('woodSelected',el===selected));const st=$('woodRaceStatus');if(st)st.textContent='TIM '+activeTeam+' memilih '+('ABCD'[idx]||'—')+'. Pilihan dapat diganti sampai timer 20 detik habis.';const stage=$('clapStage');if(stage)stage.textContent='⏱️ '+(window.__gameApi.getState().clapSecondsLeft||20)+' detik · TIM '+activeTeam+' · Jawaban '+('ABCD'[idx]||'—');}
+ document.addEventListener('click',e=>{
+  if(!visibleGame())return;
+  const balloon=e.target.closest('.answerBalloon');if(balloon){e.preventDefault();e.stopImmediatePropagation();window.__gameApi?.chooseBalloon(Number(balloon.dataset.index));return;}
+  const ice=e.target.closest('.iceBalloon');if(ice){e.preventDefault();e.stopImmediatePropagation();window.__gameApi?.resolveIceBalloon(ice);return;}
+  const team=e.target.closest('.teamPick');if(team){e.preventDefault();selectTeam(team.dataset.team);return;}
+  const log=e.target.closest('.floatingLog');if(log){e.preventDefault();e.stopImmediatePropagation();chooseWoodAnswer(Number(log.dataset.answer));return;}
+  if(e.target.closest('#woodTarget')){e.preventDefault();e.stopImmediatePropagation();const q=window.__gameApi?.getQuestion();if(q?.type!=='isian')return;lastWoodHit++;const opts=[...document.querySelectorAll('.floatingLog')];if(!opts.length)return;const next=teamAnswers[activeTeam]==null?0:(teamAnswers[activeTeam]+1)%opts.length;chooseWoodAnswer(next);const target=$('woodTarget');target.classList.remove('woodHit');void target.offsetWidth;target.classList.add('woodHit');return;}
+ },true);
+ document.addEventListener('keydown',e=>{if(!visibleGame())return;if(e.key==='1'||e.key==='2'||e.key==='3'||e.key==='4'){const q=window.__gameApi?.getQuestion();if(q?.type==='isian')chooseWoodAnswer(Number(e.key)-1);}});
+ // When the existing 20-second countdown ends, lock each team's current answer and score both.
+ const oldCountdown=window.startClapRoundCountdown;
+ window.startClapRoundCountdown=function(q){teamAnswers={A:null,B:null};activeTeam='A';updateTeamUI();if(typeof oldCountdown==='function')oldCountdown(q);};
+ // Export team scores in the displayed result and store team score detail in the session result.
+ const oldSave=window.saveGameResult;
+ window.saveGameResult=function(type,completed){const rec=oldSave?.(type,completed);if(rec){rec.teamScores={...teamScores};rec.teamAnswers={...teamAnswers};}return rec;};
+ // At end of wooden timer the original game locks its selection; score both teams before the answer result.
+ window.__woodRaceResolve=function(q){let chosen=null;['A','B'].forEach(t=>{const a=teamAnswers[t];if(a!==null&&Number(a)===Number(q.correct))teamScores[t]+=20;if(chosen===null&&a!==null)chosen=a;});updateTeamUI();window.__woodTeamScores={...teamScores};const st=$('woodRaceStatus');if(st)st.textContent='🔒 Waktu habis! TIM A: '+teamScores.A+' poin · TIM B: '+teamScores.B+' poin. Jawaban benar: '+('ABCD'[q.correct])+'.';return chosen===null?-1:chosen;};
+ window.__woodRaceReset=function(){teamAnswers={A:null,B:null};activeTeam='A';updateTeamUI();};
+ // Teacher can export/delete results for the currently selected school/class/code room.
+ function teacherResults(){const box=$('teacherLiveResults');if(!box)return [];return [...box.querySelectorAll('.livePlayer')].map(el=>({text:el.innerText}));}
+ function downloadCSV(){const rows=window.__teacherLiveResultRows||[];const header=['Nama/kelompok','Sekolah','Kelas','Kode','Skor','Tipe game','Pertanyaan','Jawaban siswa','Jawaban benar','Status benar','Tim A','Tim B','Waktu'];const csv=[header,...rows.flatMap(r=>{const answers=Array.isArray(r.answers)&&r.answers.length?r.answers:[{}];return answers.map(a=>[r.student||r.name||'',r.school||'',r.className||'',r.code||'',r.score??0,r.type||'',a.question||'',a.selected||'',a.correctAnswer||'',a.isCorrect===true?'Benar':a.isCorrect===false?'Salah':'-',r.teamScores?.A??'',r.teamScores?.B??'',r.createdAt||''].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','));})].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='jawaban-siswa-game.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ function bindTeacherButtons(){const d=$('downloadGameResults');if(d&&!d.dataset.bound){d.dataset.bound='1';d.addEventListener('click',downloadCSV);}const del=$('deleteGameResults');if(del&&!del.dataset.bound){del.dataset.bound='1';del.addEventListener('click',async()=>{if(!confirm('Hapus semua jawaban siswa di ruang sekolah/kelas/kode yang sedang dipilih? Tindakan ini tidak dapat dibatalkan.'))return;const school=window.__onlineSchool,code=window.__onlineCode;if(!school||!code){alert('Masukkan sekolah, kelas, dan kode lalu klik Masuk Ruang Game terlebih dahulu.');return}const key=( [school,window.__onlineClass||'',code].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum');const dbase=window.firebaseDB;if(!dbase){alert('Firebase belum terhubung; hasil online tidak dapat dihapus.');return}try{await Promise.all([dbase.ref('pgroRantingDua/liveRooms/'+key+'/results').remove(),dbase.ref('pgroRantingDua/liveRooms/'+key+'/raceRounds').remove()]);$('teacherLiveResults').innerHTML='<p>Jawaban siswa dan hasil Game Perahu pada ruang ini telah dihapus.</p>';}catch(err){alert('Gagal menghapus hasil. Periksa izin Firebase.');}});}}
+ const mo=new MutationObserver(bindTeacherButtons);mo.observe(document.body,{subtree:true,childList:true});setTimeout(bindTeacherButtons,800);
+})();
+</script>
+
 </body>
 </html>
+
+<!-- Accessibility/game input repair: mouse, touch, IFP, and optional camera -->
+<style>
+#gameInputTools{position:fixed;left:12px;bottom:12px;z-index:950;display:flex;gap:8px;flex-wrap:wrap;max-width:calc(100vw - 24px)}
+#gameInputTools button{border:2px solid #fff;border-radius:12px;padding:10px 14px;font-weight:800;background:#0d4778;color:#fff;box-shadow:0 4px 12px #0005;cursor:pointer;touch-action:manipulation}
+#gameInputTools button:focus-visible,.answerBalloon:focus-visible,.jumpChoice:focus-visible,#woodTarget:focus-visible,.iceBalloon:focus-visible{outline:4px solid #ffe45e!important;outline-offset:3px}
+#woodTarget{pointer-events:auto!important;z-index:35!important;cursor:pointer!important;touch-action:manipulation!important;user-select:none}
+.floatingLog{pointer-events:auto;cursor:pointer;touch-action:manipulation}
+.answerBalloon,.jumpChoice,.iceBalloon{pointer-events:auto;cursor:pointer;touch-action:manipulation;user-select:none}
+#playfield,#iceBreakLayer,#poseChoices{touch-action:manipulation}
+</style>
+<script>
+(function(){
+'use strict';
+const byId=id=>document.getElementById(id);
+let woodResolveTimer=null, cameraOptional=false;
+function gameVisible(){const g=byId('game');return !!g&&!g.classList.contains('hidden')&&byId('gameMessage')?.style.display!=='flex'}
+function activeQuestion(){try{return gameQuestions[gameIndex]}catch(e){return null}}
+function setStatus(s){const el=byId('gameStatus');if(el)el.textContent=s}
+function ensureInputTools(){let box=byId('gameInputTools');if(!box){box=document.createElement('div');box.id='gameInputTools';box.innerHTML='<button type="button" id="cameraOptionalToggle">📷 Kamera aktif (opsional)</button><button type="button" id="gameInputHelp">🖱️ Cara bermain</button>';document.body.appendChild(box);
+ byId('cameraOptionalToggle').addEventListener('click',()=>{cameraOptional=!cameraOptional;const b=byId('cameraOptionalToggle');if(cameraOptional){b.textContent='📷 Kamera: Opsional';if(typeof window.stopCamera==='function')window.stopCamera();window.handDetected=true;window.handLocked=false;setStatus('🟢 Kamera tidak digunakan. Klik mouse, sentuh layar, atau gunakan layar IFP.')}else{b.textContent='📷 Kamera aktif (opsional)';try{if(typeof window.startCamera==='function')window.startCamera();setStatus('📷 Kamera diminta. Jika izin ditolak, game tetap dapat dimainkan dengan klik/sentuhan.')}catch(e){setStatus('⚠️ Kamera tidak tersedia. Game tetap bisa dimainkan dengan klik/sentuhan.')}}});
+ byId('gameInputHelp').addEventListener('click',()=>alert('Cara bermain: klik jawaban dengan mouse/kurson, sentuh jawaban di HP/Android atau layar IFP. Untuk game kayu, klik kayu atau langsung klik batang kayu jawaban. Kamera bersifat opsional dan tidak menghalangi permainan.'));
+ }box.style.display=gameVisible()?'flex':'none';}
+function choose(idx){const q=activeQuestion();if(!q||!gameVisible()||window.selecting||window.handLocked)return;const n=Number(idx);if(!Number.isInteger(n)||n<0||n>=(q.a||[]).length)return;window.selecting=true;try{evaluateChoice(n,q)}catch(e){window.selecting=false;console.error('Pilihan game gagal diproses',e)}}
+function chooseWoodHit(hit){const q=activeQuestion();if(!q||!gameVisible()||window.selecting)return;const idx=window.clapChoiceMap?.[Number(hit)];if(idx===undefined)return;window.clapCount=Number(hit);const stage=byId('clapStage');if(stage)stage.textContent='🪵 Pilihan '+hit+' pukulan';document.querySelectorAll('.floatingLog').forEach(el=>el.classList.toggle('woodSelected',Number(el.dataset.hits)===Number(hit)));choose(idx)}
+function hitWood(){if(!gameVisible()||window.selecting)return;const q=activeQuestion();if(!q||q.type!=='isian')return;window.clapCount=(Number(window.clapCount)||0)%4+1;const hit=window.clapCount,target=byId('woodTarget');if(target){target.classList.remove('woodHit');void target.offsetWidth;target.classList.add('woodHit')}document.querySelectorAll('.floatingLog').forEach(el=>el.classList.toggle('woodSelected',Number(el.dataset.hits)===hit));const stage=byId('clapStage');if(stage)stage.textContent='🪵 Pukulan: '+hit+' — klik lagi untuk mengubah, atau tunggu sebentar untuk memilih';if(woodResolveTimer)clearTimeout(woodResolveTimer);woodResolveTimer=setTimeout(()=>{if(gameVisible()&&!window.selecting)chooseWoodHit(hit)},1300)}
+document.addEventListener('click',e=>{
+ if(!gameVisible())return;
+ return; // superseded by the stable game input handler below
+ const balloon=e.target.closest('.answerBalloon');if(balloon){e.preventDefault();choose(balloon.dataset.index);return}
+ const jump=e.target.closest('.jumpChoice');if(jump){e.preventDefault();const zone=Number(jump.dataset.zone),idx=window.jumpChoiceMap?.[zone];if(idx!==undefined)choose(idx);return}
+ const ice=e.target.closest('.iceBalloon');if(ice){e.preventDefault();if(ice.classList.contains('popped'))return;const wanted=(window.iceTargetColors||[]).includes(ice.dataset.color);ice.classList.add('popped');if(wanted){window.icePopped=(window.icePopped||0)+1;ice.style.pointerEvents='none';if(window.icePopped>=(window.iceTargetColors||[]).length){try{showResult('🎈','HEBAT!','Semua balon target berhasil disentuh.',true)}catch(err){}}}else{ice.style.opacity='.25'}return}
+ const log=e.target.closest('.floatingLog');if(log){e.preventDefault();chooseWoodHit(log.dataset.hits);return}
+ const wood=e.target.closest('#woodTarget');if(wood){e.preventDefault();hitWood();return}
+},true);
+document.addEventListener('keydown',e=>{if(!gameVisible())return;if(['1','2','3','4'].includes(e.key)){const q=activeQuestion();if(q?.type==='isian')chooseWoodHit(Number(e.key));else choose(Number(e.key)-1)}});
+const previousStart=window.startStudentGame;
+window.startStudentGame=function(){if(typeof previousStart==='function')previousStart();if(!gameVisible())return;window.handDetected=true;window.handLocked=false;window.initialActivationPending=false;window.gameHasStarted=true;const gate=byId('handGate');if(gate)gate.classList.add('hiddenGate');const countdown=byId('startCountdown');if(countdown)countdown.classList.remove('active');ensureInputTools();setStatus('🟢 Klik/sentuh jawaban untuk bermain. Kamera aktif jika diizinkan; tetap bisa bermain tanpa kamera.');try{if(!cameraOptional&&typeof window.startCamera==='function')window.startCamera()}catch(e){setStatus('🟢 Kamera tidak tersedia. Game tetap bisa dimainkan dengan klik/sentuhan.')} };
+const mo=new MutationObserver(()=>ensureInputTools());mo.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class','style']});document.addEventListener('DOMContentLoaded',ensureInputTools);setTimeout(ensureInputTools,500);
+})();
+</script>
+
+
+<!-- Final patch: reliable shared chat and boat-race team mode -->
+<style>
+#onlineDock{position:fixed!important;right:12px!important;bottom:12px!important;z-index:99999!important;width:min(350px,calc(100vw - 24px));background:#fff;color:#123;border:2px solid #2563eb;border-radius:14px;box-shadow:0 8px 28px #0004;overflow:hidden;font:14px/1.4 system-ui,sans-serif}
+#onlineDock header{display:flex;justify-content:space-between;align-items:center;padding:10px;background:#164e8a;color:white}
+#onlineMessages{height:170px;overflow:auto;padding:8px;background:#f8fafc;color:#172033}
+#onlineChatForm{display:flex;gap:6px;padding:8px;background:#fff}
+#onlineChatInput{min-width:0;flex:1;padding:9px;border:1px solid #94a3b8;border-radius:8px;color:#111}
+#onlineChatForm button{padding:8px 12px;background:#166534;color:#fff;border:0;border-radius:8px;font-weight:700}
+.onlineMsg{overflow-wrap:anywhere;padding:6px 8px;margin:4px 0;background:#e8f1ff;border-radius:8px;color:#172033}
+#game:has(#boatRaceGame) #gameQuestion{display:none!important}#game:has(#boatRaceGame) #gameHud .pill:has(#xp),#game:has(#boatRaceGame) #gameHud .pill:has(#streak),#game:has(#boatRaceGame) #gameHud #gameTimer{display:none!important}#game:has(#boatRaceGame) #writtenAnswerPanel{display:none!important}#game:has(#boatRaceGame) #woodRaceStatus{display:none!important}#boatRaceGame{position:fixed!important;z-index:1200!important;inset:8px!important;width:auto!important;height:auto!important;max-height:none!important;overflow:auto;background:linear-gradient(180deg,#b8f0fffa,#38b9dcf7 65%,#0879adf7);border:3px solid #fff;border-radius:18px;padding:clamp(8px,1.3vw,18px);margin:0!important;color:#07324b;box-shadow:0 8px 24px #00334b45;display:flex;flex-direction:column;gap:clamp(6px,1vh,12px);box-sizing:border-box}
+#boatRaceGame .raceTrack{display:grid;grid-template-columns:1fr 1fr;gap:clamp(8px,1.2vw,16px);flex:0 0 auto}
+#boatRaceGame .raceBoat{background:#f8fafc;border:3px solid white;border-radius:12px;padding:clamp(8px,1.3vh,16px);text-align:center;font-weight:900;min-width:0;font-size:clamp(15px,1.8vw,24px)}
+#boatRaceGame .raceBoat.active{outline:4px solid #facc15;background:#fff8cf}
+#boatRaceGame .boatArt{font-size:clamp(25px,4vw,42px);line-height:1}
+#boatRaceGame .raceProgress{height:8px;background:#dbeafe;border-radius:20px;overflow:hidden;margin-top:4px}
+#boatRaceGame .raceProgress span{display:block;height:100%;background:#facc15;width:0%;transition:width .35s}
+#boatRaceGame .racePrompt{background:#073b65;color:white;font-weight:900;border:2px solid white;border-radius:12px;padding:clamp(10px,1.5vh,20px);text-align:center;margin:0 auto;width:100%;max-width:none;font-size:clamp(18px,2.2vw,32px);line-height:1.25;flex:0 0 auto}
+#boatRaceGame .raceTeamPicker{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;flex:0 0 auto}
+#boatRaceGame .raceTeamPicker button{background:#164e63;color:white;border:2px solid white;border-radius:10px;padding:7px 14px;min-height:38px}
+#boatRaceGame .raceTeamPicker button.active{background:#facc15;color:#422006;border-color:#92400e}
+#boatRaceTimer{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:1000;font-size:clamp(15px,1.8vw,22px);background:#fff;border:2px solid #075985;border-radius:999px;padding:5px 12px;flex:0 0 auto}#boatRaceTimer .timerTrack{width:min(230px,38vw);height:10px;background:#dbeafe;border-radius:99px;overflow:hidden}#boatRaceTimer .timerTrack span{display:block;height:100%;width:100%;background:#16a34a;transition:width .2s linear}#boatRaceTimer.urgent{color:#b91c1c;background:#fee2e2}#boatRaceTimer.urgent .timerTrack span{background:#dc2626}
+#boatRaceAnswers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(8px,1.2vw,16px);flex:1;min-height:0;align-content:stretch}
+#boatRaceAnswers button{position:relative;border:3px solid #fff;background:linear-gradient(#fff,#dbeafe);color:#123c58;border-radius:16px;padding:clamp(8px,1.4vh,18px);font-weight:900;min-width:0;min-height:clamp(100px,17vh,220px);cursor:pointer;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(6px,1vh,12px);overflow-wrap:anywhere;word-break:normal;box-shadow:0 5px 0 #0879ad;font-size:clamp(16px,2vw,28px);line-height:1.2}
+#boatRaceAnswers button:before{content:"🚤";font-size:clamp(34px,5vw,64px);line-height:1}
+#boatRaceAnswers button.chosen{background:#facc15;color:#422006;border-color:#92400e;transform:translateY(3px);box-shadow:0 2px 0 #92400e}
+#boatRaceAnswers button:disabled{opacity:1;cursor:default}
+#boatRaceStatus{text-align:center;font-weight:900;color:#07324b;padding:4px;flex:0 0 auto;font-size:clamp(12px,1.4vw,17px)}
+@media(max-width:700px){#boatRaceGame{inset:4px!important;gap:5px;padding:6px;border-width:2px}#boatRaceGame .boatArt{font-size:clamp(24px,7vw,38px)}#boatRaceGame .raceBoat{padding:5px;font-size:13px}#boatRaceAnswers{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;min-height:0}#boatRaceAnswers button{min-height:clamp(76px,15vh,140px);font-size:clamp(13px,3.4vw,18px);padding:6px}#boatRaceAnswers button:before{font-size:clamp(26px,7vw,42px)}#boatRaceGame .racePrompt{padding:8px;font-size:clamp(15px,4vw,21px)}#boatRaceGame .raceTeamPicker button{padding:6px 10px;min-height:34px}#onlineDock{width:calc(100vw - 24px)}#onlineMessages{height:120px}}
+#boatRaceMyResults{display:none;background:#fff;color:#123c58;border:2px solid #075985;border-radius:12px;padding:10px;max-height:32vh;overflow:auto;font-size:14px}#boatRaceMyResults.show{display:block}#boatRaceActions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}#boatRaceActions button{border:2px solid #fff;border-radius:10px;padding:8px 12px;background:#073b65;color:#fff;font-weight:900;cursor:pointer}
+</style>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const db=()=>window.firebaseDB||null;
+let room='',role='student',person='',team='A',raceTimer=null,raceAnswered=false,raceSecondsLeft=20,raceSelected=null,raceStartedAt=0;
+const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function roomFromForm(){return [ $('studentSchool')?.value||'', $('studentClass')?.value||'', $('studentCode')?.value||''].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum'}
+function roomPath(){return 'pgroRantingDua/liveRooms/'+room}
+function studentResultKey(){const raw=(person||$('studentName')?.value||'Siswa').trim().toLowerCase();return raw.replace(/[^a-z0-9_-]+/g,'_').slice(0,100)||'siswa'}
+async function showMyBoatResults(){const box=$('boatRaceMyResults');if(!box)return;box.classList.add('show');box.innerHTML='<b>Memuat hasil jawaban…</b>';let rows=[];const d=db();if(d&&room){try{const snap=await d.ref(roomPath()+'/raceRounds').once('value');const rounds=snap.val()||{};Object.entries(rounds).forEach(([round,data])=>{const answers=data?.answers||{};Object.values(answers).forEach(a=>{if(String(a.accountKey||'')===studentResultKey()||String(a.name||'').trim().toLowerCase()===(person||$('studentName')?.value||'').trim().toLowerCase())rows.push({...a,round:Number(round)+1})})})}catch(e){}}if(!rows.length)rows=(window.__studentAnswerLog||[]).filter(a=>a.type==='boat-race').map((a,i)=>({...a,round:i+1,selected:a.selected,correctAnswer:a.correctAnswer,points:a.points||0}));box.innerHTML='<b>Hasil Game Perahu — '+safe(person||$('studentName')?.value||'Siswa')+'</b>'+(rows.length?rows.sort((a,b)=>(a.round||0)-(b.round||0)).map(a=>'<div style="border-bottom:1px solid #cbd5e1;padding:7px 0"><b>Soal '+safe(a.round||1)+':</b> '+safe(a.question||'')+'<br>Jawaban: <b>'+safe(a.selected||('ABCD'[a.answer]||'Belum tersedia'))+'</b> · '+(a.correct||a.isCorrect?'✅ Benar':'❌ Salah')+' · '+safe(a.points||0)+' poin<br><small>Jawaban benar: '+safe(a.correctAnswer||'')+' · Tim '+safe(a.team||'—')+'</small></div>').join(''):'<p>Belum ada hasil tersimpan untuk akun ini. Hasil online akan tampil setelah jawaban dinilai dan tersimpan di Firebase.')}
+function showChat(){
+ let dock=$('onlineDock');if(!dock){dock=document.createElement('section');dock.id='onlineDock';dock.innerHTML='<header><b>💬 Kelas Online <small id="onlineCount">Menghubungkan…</small></b><button id="onlineToggle" type="button">Sembunyikan</button></header><div id="onlineMessages">Menghubungkan chat…</div><form id="onlineChatForm"><input id="onlineChatInput" maxlength="400" placeholder="Tulis pesan..." autocomplete="off" required><button type="submit">Kirim</button></form>';document.body.appendChild(dock);
+ $('onlineToggle').onclick=()=>{const hide=$('onlineMessages').style.display!=='none';$('onlineMessages').style.display=hide?'none':'block';$('onlineChatForm').style.display=hide?'none':'flex';$('onlineToggle').textContent=hide?'Buka':'Sembunyikan'};
+ $('onlineChatForm').onsubmit=async e=>{e.preventDefault();const val=$('onlineChatInput').value.trim(),d=db();if(!val||!d||!room)return;try{await d.ref(roomPath()+'/chat').push({name:person||'Pengguna',role,text:val.slice(0,400),at:Date.now()});$('onlineChatInput').value=''}catch(err){$('onlineMessages').insertAdjacentHTML('beforeend','<p>Pesan gagal terkirim. Periksa koneksi/izin Firebase.</p>')}};
+ }
+}
+function connectChat(){
+ const d=db();showChat();
+ if(!d){$('onlineMessages').textContent='Chat belum tersambung: konfigurasi Firebase tidak ditemukan.';return}
+ const msgRef=d.ref(roomPath()+'/chat');msgRef.off('value');
+ msgRef.on('value',snap=>{const vals=Object.values(snap.val()||{}).sort((a,b)=>(a.at||0)-(b.at||0)).slice(-100);$('onlineMessages').innerHTML=vals.map(m=>'<div class="onlineMsg"><b>'+safe(m.name||'Pengguna')+'</b> <small>('+safe(m.role==='teacher'?'Guru':'Siswa')+')</small><br>'+safe(m.text||'')+'</div>').join('')||'Belum ada pesan. Mulai menyapa!';$('onlineMessages').scrollTop=$('onlineMessages').scrollHeight},err=>{$('onlineMessages').textContent='Chat tidak dapat dibaca. Periksa Firebase Database Rules.'});
+ d.ref(roomPath()+'/players').on('value',snap=>{const now=Date.now(),players=Object.values(snap.val()||{}).filter(p=>p.status!=='Offline'&&now-(p.lastSeen||now)<120000);if($('onlineCount'))$('onlineCount').textContent=players.length+' online';});
+}
+async function assignTeam(){
+ const d=db();if(!d||!room){team='A';return}
+ const ref=d.ref(roomPath()+'/teamCounter');
+ try{const result=await ref.transaction(v=>(Number(v)||0)+1);const n=Number(result.snapshot.val())||1;team=n%2===1?'A':'B'}catch(e){team=(Math.random()<.5?'A':'B')}
+}
+function getQ(){try{return window.__gameApi?.getQuestion()||window.gameQuestions?.[window.gameIndex]}catch(e){return null}}
+function gameOn(){const g=$('game');return !!g&&!g.classList.contains('hidden')&&$('gameMessage')?.style.display!=='flex'}
+function setupBoatRace(){
+ const q=getQ();if(!q||q.type!=='isian'||!gameOn())return;
+ let old=$('boatRaceGame');if(old){renderBoatQuestion();return;}
+ const stream=$('woodStream'),target=$('woodTarget');if(!stream&&!target)return;
+ const host=$('game')||stream?.parentElement||target?.parentElement;if(!host)return;
+ old=document.createElement('section');old.id='boatRaceGame';
+ old.innerHTML='<div class="raceTrack"><div class="raceBoat" id="raceBoatA"><div class="boatArt">🚣</div><div>TIM A · <span id="raceScoreA">0</span> poin</div><div class="raceProgress"><span id="raceProgressA"></span></div></div><div class="raceBoat" id="raceBoatB"><div class="boatArt">🛶</div><div>TIM B · <span id="raceScoreB">0</span> poin</div><div class="raceProgress"><span id="raceProgressB"></span></div></div></div><div class="racePrompt" id="racePrompt">Soal akan muncul di sini</div><div class="raceTeamPicker"><b>Pilih tim:</b><button type="button" data-race-team="A">🟦 TIM A</button><button type="button" data-race-team="B">🟥 TIM B</button></div><div id="boatRaceTimer" aria-live="polite">⏱️ <b id="boatRaceTime">20</b> detik <span class="timerTrack"><span id="boatRaceTimeBar"></span></span></div><div id="boatRaceAnswers"></div><div id="boatRaceStatus">Pilih tim dan klik perahu jawaban. Timer 20 detik dimulai setelah pilihan pertama.</div><div id="boatRaceActions"><button type="button" id="boatRaceViewResults">📋 Lihat Hasil Saya</button></div><div id="boatRaceMyResults" aria-live="polite"></div>';
+ host.appendChild(old);
+ if(stream)stream.style.display='none';if(target)target.style.display='none';
+ renderBoatQuestion();
+}
+function stopRaceTimer(){if(raceTimer){clearInterval(raceTimer);raceTimer=null;}}
+function paintRaceTimer(){const n=Math.max(0,raceSecondsLeft);if($('boatRaceTime'))$('boatRaceTime').textContent=n;if($('boatRaceTimeBar'))$('boatRaceTimeBar').style.width=(n/20*100)+'%';$('boatRaceTimer')?.classList.toggle('urgent',n<=5);}
+function startRaceTimer(){if(raceTimer||raceAnswered)return;raceStartedAt=Date.now();raceSecondsLeft=20;paintRaceTimer();raceTimer=setInterval(()=>{raceSecondsLeft=Math.max(0,20-Math.floor((Date.now()-raceStartedAt)/1000));paintRaceTimer();if(raceSecondsLeft<=0){stopRaceTimer();if(raceSelected!==null)submitRaceAnswer(raceSelected,true);else{$('boatRaceStatus').textContent='Waktu habis tanpa memilih jawaban. Pilih jawaban untuk memulai timer.';raceAnswered=false;}}},200);}
+function renderBoatQuestion(){
+ stopRaceTimer();raceSecondsLeft=20;raceSelected=null;raceStartedAt=0;
+ const q=getQ();if(!q||!$('boatRaceGame'))return;
+ $('racePrompt').textContent='SOAL '+(Number(window.gameIndex||0)+1)+' · '+(q.q||q.question||'Pilih jawaban yang benar');
+ $('boatRaceAnswers').innerHTML=(q.a||[]).map((a,i)=>'<button type="button" data-race-answer="'+i+'"><span>'+('ABCD'[i])+'. '+safe(a)+'</span></button>').join('');
+ $('raceBoatA').classList.toggle('active',team==='A');$('raceBoatB').classList.toggle('active',team==='B');
+ document.querySelectorAll('[data-race-team]').forEach(b=>b.classList.toggle('active',b.dataset.raceTeam===team));
+ $('boatRaceStatus').textContent='Tim terpilih: TIM '+team+'. Klik satu perahu untuk memulai timer 20 detik; jawaban boleh diganti sebelum waktu habis.';
+ paintRaceTimer();raceAnswered=false;
+}
+function chooseRaceAnswer(idx){if(raceAnswered||!getQ()||!document.querySelector('#boatRaceAnswers [data-race-answer="'+idx+'"]'))return;raceSelected=Number(idx);document.querySelectorAll('#boatRaceAnswers button').forEach((b,i)=>{b.classList.toggle('chosen',i===raceSelected);b.setAttribute('aria-pressed',i===raceSelected?'true':'false')});if(!raceTimer)startRaceTimer();$('boatRaceStatus').textContent='Pilihan sementara: '+('ABCD'[raceSelected])+'. Kamu masih bisa mengganti jawaban selama '+raceSecondsLeft+' detik.';}
+function selectRaceTeam(t){if(raceAnswered||raceTimer){if($('boatRaceStatus'))$('boatRaceStatus').textContent='Tim terkunci setelah timer dimulai. Jawaban masih bisa diganti sampai waktu habis.';return;}team=t==='B'?'B':'A';$('raceBoatA')?.classList.toggle('active',team==='A');$('raceBoatB')?.classList.toggle('active',team==='B');document.querySelectorAll('[data-race-team]').forEach(b=>b.classList.toggle('active',b.dataset.raceTeam===team));if($('boatRaceStatus'))$('boatRaceStatus').textContent='Kamu memilih TIM '+team+'. Pilih/ganti perahu jawaban sebelum timer habis.';}
+async function submitRaceAnswer(idx,fromTimer=false){
+ const q=getQ(),d=db();if(!q||raceAnswered)return;
+ if(!fromTimer&&raceSelected===null){chooseRaceAnswer(idx);return;}
+ if(fromTimer&&raceSelected===null)return;
+ if(!fromTimer&&raceSelected!==Number(idx)){chooseRaceAnswer(idx);return;}
+ raceAnswered=true;stopRaceTimer();const finalIdx=Number(raceSelected),correct=finalIdx===Number(q.correct),pts=correct?20:0;
+ document.querySelectorAll('#boatRaceAnswers button').forEach((b,i)=>{b.disabled=true;if(i===finalIdx)b.classList.add('chosen');if(i===Number(q.correct))b.style.borderColor='#22c55e'});
+ $('boatRaceStatus').textContent=correct?'Waktu habis! Benar, +20 poin untuk TIM '+team+'.':'Waktu habis. Jawaban benar: '+('ABCD'[q.correct])+'. TIM '+team+' mendapat 0 poin.';
+ window.__studentAnswerLog=window.__studentAnswerLog||[];window.__studentAnswerLog.push({question:q.q||q.question||'',type:'boat-race',selected:(q.a||[])[finalIdx]||'',selectedLetter:'ABCD'[finalIdx]||'',correctAnswer:(q.a||[])[q.correct]||'',isCorrect:correct,team,points:pts,at:new Date().toISOString()});
+ if(correct){try{window.xp=(window.xp||0)+20}catch(e){}}
+ if(d&&room){const accountKey=studentResultKey();const ref=d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers/'+accountKey);try{await ref.set({accountKey,name:person,team,answer:finalIdx,selected:(q.a||[])[finalIdx]||'',question:q.q||q.question||'',correctAnswer:(q.a||[])[q.correct]||'',correct,points:pts,at:Date.now()});const all=(await d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers').once('value')).val()||{};let a=0,b=0;Object.values(all).forEach(x=>{if(x.correct){if(x.team==='A')a+=Number(x.points)||20;else if(x.team==='B')b+=Number(x.points)||20}});if($('raceScoreA'))$('raceScoreA').textContent=a;if($('raceScoreB'))$('raceScoreB').textContent=b;if($('raceProgressA'))$('raceProgressA').style.width=Math.min(100,a)+'%';if($('raceProgressB'))$('raceProgressB').style.width=Math.min(100,b)+'%';d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/teamScores').set({A:a,B:b}).catch(()=>{});}catch(e){$('boatRaceStatus').textContent+=' Skor online belum tersimpan; periksa izin Firebase.'}}
+}
+document.addEventListener('click',e=>{const view=e.target.closest('#boatRaceViewResults');if(view){e.preventDefault();showMyBoatResults();return;}const pick=e.target.closest('[data-race-team]');if(pick){e.preventDefault();selectRaceTeam(pick.dataset.raceTeam);return;}const boat=e.target.closest('[data-race-answer]');if(boat){e.preventDefault();chooseRaceAnswer(Number(boat.dataset.raceAnswer))}},true);
+const oldStart=window.startStudentGame;
+window.startStudentGame=async function(){if(typeof oldStart==='function')oldStart();const n=($('studentName')?.value||'').trim();if(!n)return;person=n;role='student';room=roomFromForm();team='A';connectChat();setTimeout(setupBoatRace,250);};
+const oldStartOnline=window.startOnlineGame;
+document.addEventListener('click',e=>{if(e.target.closest('#teacherJoinLive')){setTimeout(()=>{role='teacher';person=window.currentTeacher?.name||'Guru';room=[ $('teacherLiveSchool')?.value||'', $('teacherLiveClass')?.value||'', $('teacherLiveCode')?.value||''].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';connectChat()},250)}},true);
+let lastRaceQuestion='';const mo=new MutationObserver(()=>{if(gameOn()&&getQ()?.type==='isian'){if(!$('boatRaceGame'))setupBoatRace();const q=getQ(),sig=String(window.gameIndex||0)+'|'+String(q?.q||q?.question||'');if(sig!==lastRaceQuestion){lastRaceQuestion=sig;if($('boatRaceGame'))renderBoatQuestion();}}if(!gameOn()&&$('boatRaceGame')){stopRaceTimer();$('boatRaceGame').remove();lastRaceQuestion='';if($('woodStream'))$('woodStream').style.display='grid';if($('woodTarget'))$('woodTarget').style.display='flex'}});
+mo.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
+})();
+</script>
+
+
+
+<!-- Revisi tambahan: skala layar penuh, panel hasil per akun, dan balon 5 detik -->
+<style>
+#boatRaceGame{position:fixed!important;inset:0!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;max-width:none!important;max-height:none!important;min-width:0!important;min-height:0!important;margin:0!important;border-radius:0!important;border-width:0!important;padding:clamp(10px,2vw,28px)!important;overflow-y:auto!important;display:flex!important;box-sizing:border-box!important;gap:clamp(8px,1.4vh,16px)!important}
+#boatRaceGame .raceTrack{width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:clamp(8px,1.5vw,20px)!important}
+#boatRaceGame .raceBoat{min-height:clamp(84px,15vh,160px)!important;display:flex!important;flex-direction:column!important;justify-content:center!important;gap:5px!important;font-size:clamp(16px,2.2vw,30px)!important}
+#boatRaceGame .boatArt{font-size:clamp(34px,5vw,66px)!important}
+#boatRaceGame .racePrompt{width:100%!important;max-width:none!important;box-sizing:border-box!important;font-size:clamp(20px,3vw,42px)!important;padding:clamp(14px,2.2vh,30px)!important;line-height:1.25!important}
+#boatRaceAnswers{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:clamp(8px,1.2vw,18px)!important;width:100%!important;flex:1 0 auto!important;min-height:clamp(150px,30vh,360px)!important}
+#boatRaceAnswers button{position:relative!important;min-width:0!important;min-height:clamp(130px,28vh,320px)!important;padding:clamp(10px,1.6vw,24px)!important;border:3px solid #fff!important;border-radius:20px!important;background:linear-gradient(180deg,#fff,#e0f2fe)!important;color:#082f49!important;box-shadow:0 7px 0 #075985,0 10px 18px #00334b35!important;font-size:clamp(15px,2vw,28px)!important;font-weight:900!important;white-space:normal!important;overflow-wrap:anywhere!important;touch-action:manipulation!important}
+#boatRaceAnswers button:before{content:'🚤';display:block;font-size:clamp(34px,5.2vw,72px)!important;margin-bottom:10px!important}
+#boatRaceAnswers button.chosen{background:linear-gradient(180deg,#fef08a,#facc15)!important;border-color:#854d0e!important;transform:translateY(3px)!important;box-shadow:0 3px 0 #854d0e!important}
+#boatRaceTimer{font-size:clamp(16px,2vw,26px)!important;text-align:center!important;flex:0 0 auto!important}
+#boatRaceStatus{font-size:clamp(14px,1.5vw,20px)!important;text-align:center!important;flex:0 0 auto!important}
+#boatRaceActions{display:flex!important;justify-content:center!important;flex-wrap:wrap!important;flex:0 0 auto!important}
+#boatRaceViewResults{font-size:clamp(14px,1.5vw,20px)!important;padding:10px 18px!important}
+#boatRaceMyResults{width:100%!important;max-height:25vh!important;overflow:auto!important;background:#ffffffed!important;border-radius:12px!important;padding:10px!important;box-sizing:border-box!important;color:#123!important}
+.iceBalloon .iceFuseTimer{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);font-size:clamp(14px,1.5vw,20px);font-weight:1000;color:#fff;background:#082f49dd;border:2px solid #fff;border-radius:999px;min-width:30px;padding:3px 7px;text-shadow:none;z-index:5;pointer-events:none}
+.iceBalloon.iceSelfBurst{animation:iceSelfBurst .35s ease-out forwards!important;pointer-events:none!important}
+@keyframes iceSelfBurst{0%{transform:scale(1);opacity:1}70%{transform:scale(1.35);opacity:.7}100%{transform:scale(.1);opacity:0}}
+@media(max-width:800px){#boatRaceGame{padding:7px!important;gap:6px!important}#boatRaceGame .raceTrack{gap:5px!important}#boatRaceGame .raceBoat{min-height:72px!important;padding:5px!important;font-size:clamp(12px,3vw,18px)!important}#boatRaceGame .boatArt{font-size:clamp(25px,7vw,40px)!important}#boatRaceGame .racePrompt{font-size:clamp(16px,4vw,23px)!important;padding:8px!important}#boatRaceAnswers{grid-template-columns:repeat(2,minmax(0,1fr))!important;min-height:0!important;gap:7px!important}#boatRaceAnswers button{min-height:clamp(92px,19vh,170px)!important;font-size:clamp(13px,3.5vw,18px)!important;padding:8px!important;border-radius:12px!important}#boatRaceAnswers button:before{font-size:clamp(27px,7vw,42px)!important;margin-bottom:4px!important}#boatRaceMyResults{max-height:20vh!important}}
+@media(max-height:560px) and (min-width:801px){#boatRaceGame{gap:5px!important;padding:6px!important}#boatRaceGame .raceBoat{min-height:58px!important;padding:5px!important}#boatRaceGame .boatArt{font-size:28px!important}#boatRaceGame .racePrompt{font-size:18px!important;padding:5px!important}#boatRaceAnswers{grid-template-columns:repeat(4,minmax(0,1fr))!important;min-height:0!important}#boatRaceAnswers button{min-height:100px!important;font-size:14px!important;padding:5px!important}}
+</style>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+// Perluas tampilan hasil perahu agar bisa dibuka dari akun siswa dan tampil penuh di perangkat.
+function ensureStudentResultButton(){const actions=$('boatRaceActions');if(!actions||$('boatRaceViewResultsAll'))return;const b=document.createElement('button');b.id='boatRaceViewResultsAll';b.type='button';b.textContent='📚 Hasil Semua Game Saya';b.style.cssText='margin:6px;padding:10px 16px;border-radius:10px;font-weight:800;background:#164e63;color:white;border:2px solid white';actions.appendChild(b);b.addEventListener('click',()=>showAllMyResults());}
+function currentStudentKey(){const name=($('studentName')?.value||'Siswa').trim().toLowerCase();const school=($('studentSchool')?.value||'').trim().toLowerCase();const cls=($('studentClass')?.value||'').trim().toLowerCase();return [school,cls,name].join('|');}
+async function showAllMyResults(){const box=$('boatRaceMyResults');if(!box)return;box.style.display='block';box.innerHTML='<b>Memuat hasil permainan akun ini…</b>';let rows=[];const d=window.firebaseDB;let roomKey=[($('studentSchool')?.value||'').trim(),($('studentClass')?.value||'').trim(),($('studentCode')?.value||'').trim().toUpperCase()].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';
+ try{if(d){const snap=await d.ref('pgroRantingDua/liveRooms/'+roomKey+'/results').once('value');const all=snap.val()||{};Object.values(all).forEach(r=>{const nm=String(r.student||r.name||'').trim().toLowerCase();const wanted=String(($('studentName')?.value||'').trim()).toLowerCase();if(nm&&nm===wanted)rows.push(r)});const race=await d.ref('pgroRantingDua/liveRooms/'+roomKey+'/raceRounds').once('value');Object.entries(race.val()||{}).forEach(([round,data])=>Object.values(data?.answers||{}).forEach(a=>{if(String(a.accountKey||'')===currentStudentKey()||String(a.name||'').trim().toLowerCase()===String(($('studentName')?.value||'').trim()).toLowerCase())rows.push({...a,type:'Game Perahu',score:a.points||0,createdAt:a.at?new Date(a.at).toISOString():'',round:Number(round)+1})}));}}catch(e){console.warn('Hasil akun tidak dapat dimuat',e)}
+ if(!rows.length)rows=(window.__studentAnswerLog||[]).map(r=>({...r,student:$('studentName')?.value||'Siswa'}));
+ box.innerHTML='<h3>📚 Hasil Semua Game — '+escSafe($('studentName')?.value||'Siswa')+'</h3>'+(rows.length?rows.map((r,i)=>'<div style="padding:8px 4px;border-bottom:1px solid #cbd5e1"><b>'+(i+1)+'. '+escSafe(r.type||'Game')+'</b> · '+escSafe(r.createdAt||r.at||'')+'<br>Soal: '+escSafe(r.question||r.code||'—')+'<br>Jawaban: '+escSafe(r.selected||r.answerText||'—')+' · '+(r.correct||r.isCorrect?'✅ Benar':'❌ Salah')+' · '+escSafe(r.points??r.score??0)+' poin</div>').join(''):'<p>Belum ada hasil yang tersimpan untuk akun ini. Pastikan siswa memakai nama akun yang sama dan Firebase terhubung.</p>');}
+function escSafe(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+const boatObserver=new MutationObserver(ensureStudentResultButton);boatObserver.observe(document.body,{childList:true,subtree:true});setTimeout(ensureStudentResultButton,400);
+// Balon ice breaking: setiap balon diberi hitung mundur 5 detik, meletus otomatis lalu muncul lagi di posisi acak.
+const balloonTimers=new WeakMap();let balloonObserver;
+function iceIsRunning(){const q=window.gameQuestions?.[window.gameIndex];return !!document.querySelector('#iceBreakLayer')&&!!q&&q.type==='icebreak'&&$('game')&&!$('game').classList.contains('hidden')&&$('gameMessage')?.style.display!=='flex';}
+function chooseColor(){const colors=[...document.querySelectorAll('#iceBreakLayer .iceBalloon')].map(b=>b.dataset.color).filter(Boolean);const targets=window.iceTargetColors||[];const all=[...new Set([...colors,...targets,'merah','biru','kuning','hijau','ungu','oranye'])];return all[Math.floor(Math.random()*all.length)]||'biru';}
+function spawnReplacement(old){if(!iceIsRunning())return;const layer=$('iceBreakLayer');if(!layer)return;const clone=old.cloneNode(true);clone.classList.remove('popped','hidden','iceSelfBurst');delete clone.dataset.fuseArmed;clone.dataset.respawned='1';clone.style.opacity='';clone.style.pointerEvents='';clone.style.left=(3+Math.random()*88)+'%';clone.style.top=(22+Math.random()*68)+'%';clone.dataset.color=chooseColor();const name=clone.dataset.color;const colors={merah:['#ef4444','#fca5a5'],biru:['#2563eb','#93c5fd'],kuning:['#eab308','#fef08a'],hijau:['#16a34a','#86efac'],ungu:['#9333ea','#d8b4fe'],oranye:['#f97316','#fdba74']};const c=colors[name]||colors.biru;clone.style.background=`radial-gradient(circle at 30% 24%,#ffffffb8 0 7%,transparent 24%),linear-gradient(135deg,${c[0]},${c[1]})`;const oldLabel=clone.querySelector('span:not(.iceFuseTimer)');if(oldLabel)oldLabel.textContent=name;layer.appendChild(clone);armBalloon(clone);}
+function armBalloon(balloon){if(balloon.dataset.fuseArmed==='1'||balloon.classList.contains('popped'))return;balloon.dataset.fuseArmed='1';let timer=balloon.querySelector('.iceFuseTimer');if(!timer){timer=document.createElement('span');timer.className='iceFuseTimer';balloon.appendChild(timer);}let left=5;timer.textContent=left;const interval=setInterval(()=>{if(!balloon.isConnected||balloon.classList.contains('popped')||!iceIsRunning()){clearInterval(interval);return;}left--;timer.textContent=Math.max(0,left);if(left<=0){clearInterval(interval);balloon.classList.add('iceSelfBurst');balloon.style.pointerEvents='none';const old=balloon;setTimeout(()=>{old.remove();spawnReplacement(old);},360);}},1000);balloonTimers.set(balloon,interval);}
+function watchBalloons(){const layer=$('iceBreakLayer');if(!layer)return;if(balloonObserver)balloonObserver.disconnect();[...layer.querySelectorAll('.iceBalloon')].forEach(armBalloon);balloonObserver=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){if(n.matches?.('.iceBalloon'))armBalloon(n);n.querySelectorAll?.('.iceBalloon').forEach(armBalloon)}})));balloonObserver.observe(layer,{childList:true,subtree:true});}
+document.addEventListener('click',e=>{const b=e.target.closest('#iceBreakLayer .iceBalloon');if(!b)return;setTimeout(()=>{if(!iceIsRunning()||b.dataset.respawned==='1'||b.dataset.respawnScheduled==='1')return;if(!b.isConnected||b.classList.contains('popped')){b.dataset.respawnScheduled='1';spawnReplacement(b);}},500);},true);
+const iceWatch=new MutationObserver(()=>{if(iceIsRunning())watchBalloons();});iceWatch.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});setInterval(()=>{if(iceIsRunning())watchBalloons();},1500);
+// Tambahkan hasil rinci Game Perahu pada panel guru setelah panel ruang dibuat.
+async function addTeacherRaceDetails(){const box=$('teacherLiveResults'),d=window.firebaseDB;if(!box||!d||!$('teacherLiveCode'))return;if(box.dataset.raceDetails==='1')return;box.dataset.raceDetails='1';const key=[($('teacherLiveSchool')?.value||'').trim(),($('teacherLiveClass')?.value||'').trim(),($('teacherLiveCode')?.value||'').trim().toUpperCase()].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';try{const snap=await d.ref('pgroRantingDua/liveRooms/'+key+'/raceRounds').once('value');const rounds=snap.val()||{};const entries=[];Object.entries(rounds).forEach(([r,data])=>Object.values(data?.answers||{}).forEach(a=>entries.push({...a,round:Number(r)+1})));let detail=document.getElementById('teacherRaceDetailResults');if(!detail){detail=document.createElement('div');detail.id='teacherRaceDetailResults';box.appendChild(detail);}detail.innerHTML='<h3>🛶 Rincian Jawaban Game Perahu ('+entries.length+')</h3>'+(entries.length?entries.sort((a,b)=>(a.round||0)-(b.round||0)).map(a=>'<div style="padding:8px;border-bottom:1px solid #cbd5e1"><b>'+escSafe(a.name||'Siswa')+'</b> · Soal '+a.round+' · TIM '+escSafe(a.team||'—')+'<br>'+escSafe(a.question||'')+'<br>Jawaban: '+escSafe(a.selected||'—')+' · '+(a.correct?'✅ Benar':'❌ Salah')+' · '+escSafe(a.points||0)+' poin</div>').join(''):'<p>Belum ada jawaban Game Perahu di ruang ini.</p>');}catch(e){box.dataset.raceDetails='';}}
+const teacherWatch=new MutationObserver(()=>{if($('teacherLiveResults')&&$('teacherJoinLive'))addTeacherRaceDetails()});teacherWatch.observe(document.body,{childList:true,subtree:true});setInterval(()=>{if($('teacherLiveResults')&&$('teacherJoinLive')&&!$('teacherScreen')?.classList.contains('hidden')){const d=$('teacherLiveResults');if(d)d.dataset.raceDetails='';addTeacherRaceDetails();}},5000);
+})();
+</script>
