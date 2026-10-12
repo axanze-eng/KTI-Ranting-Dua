@@ -1360,34 +1360,75 @@ async function activateCameraFromButton(){
  await startCamera();
  buttons.forEach(b=>{b.disabled=false;b.textContent='📷 Aktifkan Kamera'});
 }
+let cameraOpening=false;
+async function openCompatibleCamera(video){
+ if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){
+  throw new Error('Kamera browser memerlukan HTTPS atau localhost. Jangan membuka game melalui HTTP biasa atau file di browser IFP.');
+ }
+ if(document.permissionsPolicy?.allowsFeature && !document.permissionsPolicy.allowsFeature('camera')){
+  throw new Error('Akses kamera diblokir oleh Permissions-Policy halaman/iframe. Buka game langsung di tab browser atau izinkan camera pada iframe.');
+ }
+ const attempts=[
+  {audio:false,video:{facingMode:{ideal:'user'},width:{ideal:640},height:{ideal:480},frameRate:{ideal:20,max:30}}},
+  {audio:false,video:{width:{ideal:320},height:{ideal:240}}},
+  {audio:false,video:true}
+ ];
+ let lastError;
+ for(const constraints of attempts){
+  try{return await navigator.mediaDevices.getUserMedia(constraints)}
+  catch(e){lastError=e;if(['NotAllowedError','PermissionDeniedError','SecurityError'].includes(e.name))break;}
+ }
+ throw lastError||new Error('Tidak dapat mengakses kamera.');
+}
 async function startCamera(){
+ if(cameraOpening||running)return;
+ cameraOpening=true;
+ let stream=null;
  try{
-  if(!window.Camera||(!window.Hands&&!window.Pose))throw new Error('Pustaka kamera/MediaPipe belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
-  if(camera||running)return;
+  if(!window.Hands&&!window.Pose)throw new Error('Pustaka MediaPipe belum termuat. Periksa koneksi internet dan muat ulang halaman.');
+  const video=$('video');
+  stream=await openCompatibleCamera(video);
+  video.setAttribute('playsinline','');video.muted=true;video.autoplay=true;
+  video.srcObject=stream;
+  await video.play();
   const type=gameQuestions[gameIndex]?.type||'pg';
-  // Hands selalu aktif untuk membaca gestur dua jari sebagai tombol mulai pada semua mode.
   if(window.Hands){hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});hands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:.45,minTrackingConfidence:.45});hands.onResults(processHand);}
   if(window.Pose){poseModel=new Pose({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});poseModel.setOptions({modelComplexity:0,smoothLandmarks:true,enableSegmentation:false,minDetectionConfidence:.5,minTrackingConfidence:.5});poseModel.onResults(processBodyPose);}
-  camera=new Camera($('video'),{onFrame:async()=>{try{if(hands)await hands.send({image:$('video')});if(poseModel)await poseModel.send({image:$('video')});}catch(err){console.warn('Frame kamera gagal diproses',err)}},width:480,height:360});
-  await camera.start();running=true;
+  let active=true, busy=false, frameHandle=0;
+  const tick=async()=>{
+   if(!active)return;
+   if(!busy && video.readyState>=2){
+    busy=true;
+    try{if(hands)await hands.send({image:video});if(active&&poseModel)await poseModel.send({image:video});}
+    catch(e){console.warn('Pemrosesan frame:',e)}finally{busy=false;}
+   }
+   if(active)frameHandle=requestAnimationFrame(tick);
+  };
+  camera={stop(){active=false;cancelAnimationFrame(frameHandle);stream.getTracks().forEach(t=>t.stop());}};
+  running=true;tick();
   $('gameStatus').textContent=initialActivationPending?'🟢 Kamera aktif — tunjukkan dua jari untuk mulai':type==='essay'?'🟢 Kamera aktif — geser posisi ke zona jawaban':type==='isian'?'🟢 Kamera aktif — tepuk tangan di depan kamera':'🟢 Tangan aktif — arahkan telunjuk ke balon';
   $('handGateStatus').textContent='👋 Kamera aktif. Arahkan tangan ke kamera...';
   if($('activateCameraGateBtn'))$('activateCameraGateBtn').classList.add('hidden');
   if($('activateCameraPanelBtn'))$('activateCameraPanelBtn').classList.add('hidden');
-  if($('bodyPoseStatus'))$('bodyPoseStatus').textContent=type==='essay'?'🟢 Kamera aktif. Geser posisi tubuh ke zona jawaban tanpa meloncat.':type==='isian'?'🟢 Kamera aktif. Tepukkan kedua tangan di depan dada.':'🟢 Kamera aktif.';
+  if($('bodyPoseStatus'))$('bodyPoseStatus').textContent=type==='essay'?'🟢 Kamera aktif. Geser posisi tubuh ke zona jawaban.':type==='isian'?'🟢 Kamera aktif. Tepukkan kedua tangan di depan dada.':'🟢 Kamera aktif.';
  }catch(e){
   running=false;
   if(camera){try{camera.stop()}catch(_){}camera=null}
+  if(stream)stream.getTracks().forEach(t=>t.stop());
   if(hands){try{hands.close()}catch(_){}hands=null}
   if(poseModel){try{poseModel.close()}catch(_){}poseModel=null}
-  const v=$('video');if(v&&v.srcObject){v.srcObject.getTracks().forEach(t=>t.stop());v.srcObject=null}
-  const detail=(e&&e.name==='NotAllowedError')?'Izin kamera ditolak atau diblokir. Klik ikon gembok/izin situs di bilah alamat, izinkan Kamera, lalu tekan tombol Kamera untuk mencoba lagi.':(e&&e.name==='NotFoundError')?'Kamera tidak ditemukan. Sambungkan kamera atau pilih kamera yang tersedia di perangkat.':(e&&e.name==='NotReadableError')?'Kamera sedang digunakan aplikasi lain. Tutup aplikasi kamera lain lalu coba lagi.':(e&&e.name==='OverconstrainedError')?'Kamera tidak mendukung pengaturan video yang diminta. Coba kamera lain.':(location.protocol!=='https:'&&location.hostname!=='localhost')?'Browser memblokir kamera pada halaman yang tidak aman. Buka file melalui HTTPS atau localhost.':'Kamera gagal aktif. Periksa izin kamera, koneksi internet untuk memuat pustaka, lalu coba lagi.';
+  const v=$('video');if(v)v.srcObject=null;
+  let detail=e?.message||'Kamera gagal aktif.';
+  if(['NotAllowedError','PermissionDeniedError','SecurityError'].includes(e?.name))detail='Izin kamera ditolak oleh browser atau sistem IFP. Buka pengaturan situs (ikon gembok), pilih Kamera → Izinkan, lalu muat ulang. Periksa juga izin Kamera pada pengaturan Android/Windows dan kebijakan administrator IFP.';
+  else if(['NotFoundError','DevicesNotFoundError'].includes(e?.name))detail='Tidak ada kamera terdeteksi. Periksa apakah IFP memiliki kamera internal atau kamera USB terhubung.';
+  else if(['NotReadableError','TrackStartError'].includes(e?.name))detail='Kamera sedang dipakai aplikasi lain atau tidak dapat dibuka oleh sistem. Tutup aplikasi kamera/video meeting, lalu coba lagi.';
+  else if(e?.name==='NotSupportedError')detail='Browser IFP tidak mendukung fitur kamera ini. Perbarui Chrome/Edge atau gunakan browser yang mendukung getUserMedia.';
   $('gameStatus').textContent='🔴 '+detail;
   if($('handGateStatus'))$('handGateStatus').textContent='🔴 '+detail;
   if($('bodyPoseStatus'))$('bodyPoseStatus').textContent='🔴 '+detail;
   const startBtn=$('studentStartCameraBtn');if(startBtn){startBtn.disabled=false;startBtn.textContent='🔄 COBA LAGI';}
   console.warn('Kamera tidak dapat diaktifkan:',e);
- }
+ }finally{cameraOpening=false;}
 }
 function rHandsCountLabel(){const n=window.detectedHandCount||0;return n>=2?'2 tangan terlihat':'1 tangan terlihat';}
 function startClapRoundCountdown(q){
