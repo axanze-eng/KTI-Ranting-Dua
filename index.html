@@ -640,6 +640,11 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
    <button class="ghost" onclick="openLogin('guru')">👨‍🏫 Masuk Guru</button>
    <button class="ghost" onclick="openLogin('admin')">🛡️ Masuk Admin</button>
   </div>
+  <section id="publicMaterialsPanel" class="card" style="width:min(900px,96%);margin:18px auto 0;text-align:left;background:rgba(8,42,75,.92);border:2px solid #ffffff75;border-radius:20px">
+   <h3 style="margin:0 0 6px">📚 Materi Pembelajaran PDF</h3>
+   <p style="margin:0 0 12px;color:#d3e6ee">Pilih materi untuk dibaca online sebelum masuk sebagai siswa.</p>
+   <div id="publicMaterialsList"><div class="empty">Memuat daftar materi...</div></div>
+  </section>
   <div class="homeFeatures">
    <div><span>⏱️</span><b>Timer Soal</b><small>Waktu terukur</small></div>
    <div><span>🏫</span><b>Per Sekolah</b><small>Kode soal aman</small></div>
@@ -701,6 +706,20 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
  <div class="topbar"><span>👨‍🏫</span><h2 id="teacherTitle">Panel Guru</h2><button class="ghost" onclick="showHome()">Keluar</button></div>
  <div class="content">
   <div class="notice">💡 Buat banyak soal dengan memakai <b>Kode Soal yang sama</b>. Setiap baris disimpan sebagai soal terpisah dan muncul pada akun siswa. Bentuk <b>pg</b> untuk balon udara, sedangkan <b>isian</b>/<b>essay</b> untuk game perahu.</div>
+  <div class="card" id="teacherMaterialsCard" style="margin:16px 0">
+   <h3>📚 Upload Materi Pembelajaran (PDF)</h3>
+   <p class="small">Materi akan tampil di halaman awal agar siswa dapat memilih dan membaca PDF secara online tanpa login terlebih dahulu.</p>
+   <div class="formGrid">
+    <div><label>Judul Materi</label><input id="materialTitle" maxlength="120" placeholder="Contoh: Bab 1 Pecahan"></div>
+    <div><label>Mata Pelajaran</label><input id="materialSubject" maxlength="100" placeholder="Contoh: Matematika"></div>
+   </div>
+   <label>Keterangan (opsional)</label><input id="materialDescription" maxlength="300" placeholder="Ringkasan materi">
+   <label>Pilih file PDF</label><input id="materialPdfFile" type="file" accept="application/pdf,.pdf">
+   <div class="actions"><button class="primary" id="uploadMaterialBtn" onclick="uploadLearningMaterial()">☁️ Upload Materi</button></div>
+   <div id="teacherMaterialsStatus" class="small" style="margin-top:10px"></div>
+   <div style="margin-top:14px"><h3>📖 Materi yang Sudah Diunggah</h3><div id="teacherMaterialsList"><div class="empty">Memuat materi...</div></div></div>
+  </div>
+
   <div class="card">
    <h3>📝 Tambah / Ubah Soal</h3>
    <input type="hidden" id="qId">
@@ -808,6 +827,7 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
 <!-- Firebase compat SDK: cocok dengan API firebase.database().ref() yang dipakai aplikasi -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script>
 (function () {
   'use strict';
@@ -2055,7 +2075,6 @@ updateQuestionTypeUI();
 #onlineDock header b{flex:1}#onlineMessages{padding:10px;overflow:auto;min-height:80px;max-height:30vh;font-size:13px}
 .onlineMsg{padding:7px 9px;margin:5px 0;background:#ffffff12;border-radius:9px;overflow-wrap:anywhere}
 #onlineDock form{display:flex;gap:6px;padding:8px}#onlineDock form input{min-width:0;flex:1;padding:9px}
-#teacherLivePanel{margin-top:16px}.livePlayer{padding:10px;margin:6px 0;border-radius:10px;background:#ffffff12}
 @media(max-width:600px){#onlineDock{max-height:45vh;bottom:6px;right:6px;width:calc(100vw - 12px)}#onlineMessages{max-height:20vh}}
 </style>
 <script>
@@ -2094,8 +2113,12 @@ function startOnline(role,user){
    presenceRef.onDisconnect().remove().then(()=>presenceRef.set(session)).catch(err=>console.warn('Firebase presence:',err));
    window.__onlineSessionRef=presencePath;
    presenceHeartbeat=setInterval(()=>{
-     if(activePresenceRef===presenceRef){presenceRef.update({lastSeen:Date.now()}).catch(()=>{});}
-   },15000);
+     if(activePresenceRef===presenceRef){
+       const inGame=!!$id('game')&&!$id('game').classList.contains('hidden')&&$id('gameMessage')?.style.display!=='flex';
+       const qText=($id('gameQuestion')?.innerText||'').trim().slice(0,500);
+       presenceRef.update({lastSeen:Date.now(),status:inGame?'Sedang bermain':($id('gameMessage')?.style.display==='flex'?'Selesai':'Online'),isPlaying:inGame,gameName:($id('answerGameTitle')?.innerText||'Petualangan').trim().slice(0,100),currentQuestion:qText,questionNumber:Number($id('round')?.textContent)||0,totalQuestions:Number($id('totalQ')?.textContent)||0,score:Number($id('xp')?.textContent)||0,lastAnswer:(window.__studentAnswerLog||[]).slice(-1)[0]||null}).catch(()=>{});
+     }
+   },2500);
  } else window.__onlineSessionRef=null;
  watch(base+'/chat',snap=>{
    const msgs=Object.entries(snap.val()||{}).sort((a,b)=>(a[1].at||0)-(b[1].at||0)).slice(-80);
@@ -2105,40 +2128,9 @@ function startOnline(role,user){
  watch(base+'/players',snap=>{
    const players=Object.values(snap.val()||{}).filter(p=>p.status!=='Offline');
    if($id('onlineCount'))$id('onlineCount').textContent='· '+players.length+' online';
-   const panel=$id('teacherLivePanel');if(panel&&onlineRole==='teacher'&&!document.getElementById('teacherJoinLive'))panel.innerHTML='<h3>🟢 Siswa yang sedang bermain ('+players.length+')</h3>'+(players.map(p=>'<div class="livePlayer"><b>'+esc(p.name)+'</b> · '+esc(p.className||'')+'<br><small>'+esc(p.status||'Bermain')+' · '+esc(p.school||'')+'</small></div>').join('')||'<p class="small">Belum ada siswa aktif di ruang kode ini.</p>');
  });
 }
-function ensureTeacherPanel(){
- const screen=$id('teacherScreen');if(!screen||$id('teacherLivePanel'))return;
- const panel=document.createElement('div');panel.id='teacherLivePanel';panel.className='card';
- panel.innerHTML='<h3>🎮 Pantau Game Siswa</h3><p class="small">Masukkan sekolah, kelas, dan kode soal yang dibagikan kepada siswa untuk bergabung ke ruang game, melihat siswa online, hasil, dan chat.</p><div><label>Nama sekolah</label><input id="teacherLiveSchool" placeholder="Nama sekolah sesuai data guru"></div><div class="formGrid"><div><label>Kelas</label><input id="teacherLiveClass" placeholder="Contoh: 4A"></div><div><label>Kode soal</label><input id="teacherLiveCode" placeholder="Kode dari guru"></div></div><div class="actions"><button type="button" class="primary" id="teacherJoinLive">Masuk Ruang Game</button></div><div id="teacherLiveResults"></div>';
- const content=screen.querySelector('.content');if(content)content.appendChild(panel);
- $id('teacherJoinLive').onclick=()=>{
-   const cls=$id('teacherLiveClass').value.trim(),code=$id('teacherLiveCode').value.trim().toUpperCase();
-   if(!code){alert('Masukkan kode soal.');return}window.__onlineSchool=$id('teacherLiveSchool').value.trim();if(!window.__onlineSchool){alert('Masukkan nama sekolah sesuai data siswa.');return}
-   window.__onlineClass=cls||window.currentTeacher?.className||'';
-   window.__onlineCode=code;
-   startOnline('teacher',(window.currentTeacher&&window.currentTeacher.name)||'Guru');
-   const d=db();if(d){const key=roomKey();d.ref('pgroRantingDua/liveRooms/'+key+'/results').on('value',snap=>{
-     const vals=Object.values(snap.val()||{});window.__teacherLiveResultRows=vals;const liveBox=$id('teacherLiveResults'),boatDetail=$id('teacherLiveBoatResults'),liveAnswerDetail=$id('teacherLiveAnswerResults');if(liveBox){liveBox.innerHTML='<h3>📊 Hasil permainan ('+vals.length+')</h3>'+(vals.map(r=>'<div class="livePlayer"><b>'+esc(r.student||r.name||'Siswa')+'</b> · Skor: '+esc(r.score??0)+'<br><small>'+esc(r.createdAt||'')+'</small></div>').join('')||'<p class="small">Hasil akan muncul saat siswa selesai bermain.</p>');if(boatDetail)liveBox.appendChild(boatDetail);if(liveAnswerDetail)liveBox.appendChild(liveAnswerDetail)}
-   });
-     d.ref('pgroRantingDua/liveRooms/'+key+'/liveAnswers').on('value',snap=>{
-       const rows=Object.values(snap.val()||{}).filter(a=>!a.code||String(a.code).toUpperCase()===String($id('teacherLiveCode')?.value||'').trim().toUpperCase());
-       let live=$id('teacherLiveAnswerResults');if(!live){live=document.createElement('div');live.id='teacherLiveAnswerResults';$id('teacherLiveResults')?.appendChild(live);}
-       live.innerHTML='<h3>⚡ Jawaban realtime semua game ('+rows.length+')</h3>'+(rows.length?rows.sort((a,b)=>Number(a.at)-Number(b.at)).slice(-100).reverse().map(a=>'<div class="livePlayer"><b>'+esc(a.student||'Siswa')+'</b> · '+esc(a.game||'Game')+(a.team?' · TIM '+esc(a.team):'')+' · Soal '+(Number(a.questionIndex||0)+1)+'<br>'+esc(a.question||'')+'<br>Jawaban: '+esc(a.selected||'—')+' · '+(a.correct?'✅ Benar':'❌ Salah')+' · '+esc(a.points||0)+' poin</div>').join(''):'<p class="small">Menunggu siswa menjawab soal di Balon Udara, Perahu, atau Ice Breaking…</p>');
-     });
-     d.ref('pgroRantingDua/liveRooms/'+key+'/raceRounds').on('value',snap=>{
-       const rounds=snap.val()||{},boatRows=[];
-       Object.entries(rounds).forEach(([roundId,round])=>Object.values(round?.answers||{}).forEach(a=>{
-         if(!a)return;boatRows.push({name:a.name||'Siswa',team:a.team||'—',round:Number(a.questionIndex??roundId)+1,question:a.question||'',answer:a.selected??a.answerText??a.answer??'',correct:a.correct===true,points:Number(a.points)||0,at:a.at||0});
-       }));
-       window.__teacherBoatLiveRows=boatRows;
-       let detail=$id('teacherLiveBoatResults');if(!detail){detail=document.createElement('div');detail.id='teacherLiveBoatResults';$id('teacherLiveResults')?.appendChild(detail);}
-       detail.innerHTML='<h3>🚣 Jawaban Game Perahu (Realtime · '+boatRows.length+')</h3>'+(boatRows.length?boatRows.sort((a,b)=>Number(a.round)-Number(b.round)).map(a=>'<div class="livePlayer"><b>'+esc(a.name)+'</b> · TIM '+esc(a.team)+' · Soal '+a.round+'<br>'+esc(a.question)+'<br>Jawaban: '+esc(a.answer||'—')+' · '+(a.correct?'✅ Benar':'❌ Salah')+' · '+a.points+' poin</div>').join(''):'<p class="small">Menunggu jawaban Game Perahu dari siswa…</p>');
-     });
-   }
- };
-}
+// Panel Pantau Game Siswa lama sengaja dihapus dan diganti dashboard realtime di bawah.
 const oldStart=window.startStudentGame;
 window.startStudentGame=function(){
  window.__gameResultSavedForRun=false;window.__gameResultRecord=null;window.__studentAnswerLog=[];
@@ -2234,11 +2226,7 @@ setTimeout(ensureTeacherPanel,1200);
  // At end of wooden timer the original game locks its selection; score both teams before the answer result.
  window.__woodRaceResolve=function(q){let chosen=null;['A','B'].forEach(t=>{const a=teamAnswers[t];if(a!==null&&Number(a)===Number(q.correct))teamScores[t]+=20;if(chosen===null&&a!==null)chosen=a;});updateTeamUI();window.__woodTeamScores={...teamScores};const st=$('woodRaceStatus');if(st)st.textContent='🔒 Waktu habis! TIM A: '+teamScores.A+' poin · TIM B: '+teamScores.B+' poin. Jawaban benar: '+('ABCD'[q.correct])+'.';return chosen===null?-1:chosen;};
  window.__woodRaceReset=function(){teamAnswers={A:null,B:null};activeTeam='A';updateTeamUI();};
- // Teacher can export/delete results for the currently selected school/class/code room.
- function teacherResults(){const box=$('teacherLiveResults');if(!box)return [];return [...box.querySelectorAll('.livePlayer')].map(el=>({text:el.innerText}));}
- function downloadCSV(){const rows=window.__teacherLiveResultRows||[];const header=['Nama/kelompok','Sekolah','Kelas','Kode','Skor','Tipe game','Pertanyaan','Jawaban siswa','Jawaban benar','Status benar','Tim A','Tim B','Waktu'];const csv=[header,...rows.flatMap(r=>{const answers=Array.isArray(r.answers)&&r.answers.length?r.answers:[{}];return answers.map(a=>[r.student||r.name||'',r.school||'',r.className||'',r.code||'',r.score??0,r.type||'',a.question||'',a.selected||'',a.correctAnswer||'',a.isCorrect===true?'Benar':a.isCorrect===false?'Salah':'-',r.teamScores?.A??'',r.teamScores?.B??'',r.createdAt||''].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','));})].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='jawaban-siswa-game.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- function bindTeacherButtons(){const del=$('deleteGameResults');if(del&&!del.dataset.bound){del.dataset.bound='1';del.addEventListener('click',async()=>{if(!confirm('Hapus semua jawaban siswa di ruang sekolah/kelas/kode yang sedang dipilih? Tindakan ini tidak dapat dibatalkan.'))return;const school=window.__onlineSchool,code=window.__onlineCode;if(!school||!code){alert('Masukkan sekolah, kelas, dan kode lalu klik Masuk Ruang Game terlebih dahulu.');return}const key=( [school,window.__onlineClass||'',code].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum');const dbase=window.firebaseDB;if(!dbase){alert('Firebase belum terhubung; hasil online tidak dapat dihapus.');return}try{await Promise.all([dbase.ref('pgroRantingDua/liveRooms/'+key+'/results').remove(),dbase.ref('pgroRantingDua/liveRooms/'+key+'/raceRounds').remove()]);$('teacherLiveResults').innerHTML='<p>Jawaban siswa dan hasil Game Perahu pada ruang ini telah dihapus.</p>';}catch(err){alert('Gagal menghapus hasil. Periksa izin Firebase.');}});}}
- const mo=new MutationObserver(bindTeacherButtons);mo.observe(document.body,{subtree:true,childList:true});setTimeout(bindTeacherButtons,800);
+
 })();
 </script>
 
@@ -2310,72 +2298,55 @@ document.addEventListener('click',e=>{if(e.target.closest('#teacherJoinLive, #st
 </script>
 
 
+<!-- Pantau Game Siswa versi lama dihapus seluruhnya; digantikan panel realtime baru. -->
+
+ 
+<div id="pdfReaderModal" class="modal hidden" style="z-index:1000">
+ <div class="modalCard glass" style="width:min(1100px,98%);height:min(92vh,900px);display:flex;flex-direction:column;padding:14px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><h2 id="pdfReaderTitle" style="margin:0;flex:1">📄 Materi PDF</h2><button class="ghost" onclick="closePdfReader()">Tutup ✕</button></div>
+  <iframe id="pdfReaderFrame" title="Pembaca materi PDF" style="width:100%;flex:1;min-height:0;border:0;border-radius:12px;background:#fff" loading="lazy"></iframe>
+ </div>
+</div>
 <style>
-#teacherReturnGame,#teacherBackPanel{display:none!important}
-#teacherRoomView{position:fixed;inset:0;z-index:9000;background:#07152f;color:white;overflow:auto;padding:20px}
-#teacherRoomView.hidden{display:none!important}
-#teacherRoomView .teacherRoomTop{display:flex;gap:12px;align-items:center;flex-wrap:wrap;position:sticky;top:0;background:#07152f;padding:10px;z-index:2}
-#teacherRoomView .teacherRoomTop button{background:#facc15;color:#422006}
-#teacherRoomView .roomGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-#teacherRoomView .roomBox{padding:16px;background:#153568;border-radius:15px;min-width:0}
-#teacherRoomView .roomEntry{padding:10px;border-bottom:1px solid #ffffff33;overflow-wrap:anywhere}
-#teacherRoomView .roomEntry button{margin:5px;background:#ff536d;color:white}
-#teacherRoomView select{max-width:350px}
+#teacherGameLivePanel{margin-top:16px;color:var(--text,#123047)}
+#teacherGameLivePanel .liveToolbar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#teacherGameLivePanel .liveToolbar label{display:block;font-weight:700;margin-bottom:4px}
+#teacherGameLivePanel input{width:100%;box-sizing:border-box;padding:10px;border-radius:9px}
+#teacherGameLivePanel .liveGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:12px}
+#teacherGameLivePanel .liveStudentCard{background:#0c3150;color:#fff;border:1px solid #39708d;border-radius:12px;padding:12px;min-width:0}
+#teacherGameLivePanel .liveStudentCard h4{margin:0 0 8px;font-size:16px}
+#teacherGameLivePanel .liveStudentCard p{margin:5px 0;overflow-wrap:anywhere}
+#teacherGameLivePanel .liveTag{display:inline-block;padding:3px 8px;border-radius:99px;background:#155e75;color:#fff;font-size:12px;font-weight:800}
+#teacherGameLivePanel .liveTableWrap{overflow:auto;max-width:100%}
+#teacherGameLivePanel table{border-collapse:collapse;width:100%;min-width:680px;margin:8px 0}
+#teacherGameLivePanel th,#teacherGameLivePanel td{border:1px solid #9ca3af;padding:7px;text-align:left;vertical-align:top}
+#teacherGameLivePanel th{background:#dbeafe;color:#123047}
+#teacherGameLivePanel .liveNotice{padding:10px;border-radius:10px;background:#e0f2fe;color:#0c4a6e;margin:10px 0}
+@media(max-width:650px){#teacherGameLivePanel .liveToolbar{grid-template-columns:1fr}}
 </style>
 <script>
-/* Panel guru: ruang pemantauan langsung, tanpa mengubah status siswa atau memulai timer siswa. */
-(function(){'use strict';
-const $=id=>document.getElementById(id);
-let refs=[],currentRoom='',results={},rounds={},players={},liveAnswers={},filter='all',opened=false;
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const roomKey=()=>[($('teacherLiveSchool')?.value||window.__onlineSchool||'').trim(),($('teacherLiveClass')?.value||window.__onlineClass||'').trim(),($('teacherLiveCode')?.value||window.__onlineCode||'').trim().toUpperCase()].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';
-function db(){return window.firebaseDB}
-function close(){opened=false;refs.forEach(([r,f])=>r.off('value',f));refs=[];$('teacherRoomView')?.classList.add('hidden');$('teacherScreen')?.classList.remove('hidden');}
-function watch(path,cb){const r=db().ref(path),fn=s=>cb(s.val()||{});r.on('value',fn,e=>{const x=$('teacherRoomError');if(x)x.textContent='Gagal membaca Firebase: '+e.message});refs.push([r,fn]);}
-function kind(v){return String(v?.type||v?.gameType||v?.game||'Game').trim()||'Game'}
-function activeCode(){return String($('teacherLiveCode')?.value||window.__onlineCode||'').trim().toUpperCase()}
-function codeMatches(value,parent){const raw=value?.code||value?.questionCode||value?.kodeSoal||parent?.code||parent?.questionCode||parent?.kodeSoal||'';const code=String(raw).trim().toUpperCase();return !code||code===activeCode()}
-function filteredResults(){return Object.entries(results).filter(([,r])=>codeMatches(r)&& (filter==='all'||kind(r)===filter))}
-function filteredBoat(){const all=Object.entries(rounds).flatMap(([roundId,r])=>Object.entries(r?.answers||{}).filter(([,a])=>codeMatches(a,r)).map(([answerId,a])=>({roundId,answerId,a})));const latest=all.reduce((best,x)=>{const id=String(x.a.matchId||'');return id>best? id:best},'');return latest?all.filter(x=>String(x.a.matchId||'')===latest):all}
-
-function renderLiveAnswers(){const box=$('teacherRoomLiveAnswers');if(!box)return;const rows=Object.entries(liveAnswers||{}).map(([id,a])=>({id,...a})).filter(a=>codeMatches(a)&& (filter==='all'||String(a.game||'')===filter||String(a.type||'')===filter||(filter==='pg'&&a.game==='Balon Udara')||(filter==='icebreak'&&a.game==='Ice Breaking')||((filter==='isian'||/perahu/i.test(filter))&&a.game==='Game Perahu')));rows.sort((a,b)=>Number(b.at||0)-Number(a.at||0));box.innerHTML=rows.length?rows.slice(0,150).map(a=>'<div class="roomEntry"><b>'+esc(a.student||a.name||'Siswa')+'</b> · '+esc(a.game||a.type||'Game')+(a.team?' · TIM '+esc(a.team):'')+' · Soal '+(Number(a.questionIndex||0)+1)+'<br>'+esc(a.question||'')+'<br>Jawaban: <b>'+esc(a.selected||a.answer||'—')+'</b> · '+(a.correct?'✅ Benar':'❌ Salah')+' · '+esc(a.points??0)+' poin <small>· '+esc(a.at?new Date(Number(a.at)).toLocaleTimeString():'')+'</small></div>').join(''):'Belum ada jawaban langsung untuk game/kode ini.';}
-function render(){if(!opened)return;
- const all=Object.entries(results).filter(([,r])=>codeMatches(r));
- const boat=filteredBoat();
- const games=[...new Set(all.map(([,r])=>kind(r)).filter(Boolean))];
- if(boat.length&&!games.some(g=>/perahu/i.test(g)))games.push('Perahu');
- const select=$('teacherRoomFilter');if(select){select.innerHTML='<option value="all">Semua game</option>'+games.map(g=>'<option value="'+esc(g)+'">'+esc(g)+'</option>').join('');if(filter!=='all'&&!games.includes(filter))filter='all';select.value=filter;}
- const now=Date.now();
- const onlinePlayers=Object.values(players).filter(p=>p&&p.role==='student'&&p.status!=='Offline'&&Number(p.lastSeen)>0&&Math.abs(now-Number(p.lastSeen))<45000);
- $('teacherRoomPlayers').innerHTML=onlinePlayers.map(p=>'<div class="roomEntry">'+esc(p.name||'Siswa')+' · '+esc(p.team||p.selectedTeam||'-')+' · 🟢 Online</div>').join('')||'Belum ada siswa yang sedang online.';
- const visible=all.filter(([,r])=>filter==='all'||kind(r)===filter);
- const groupNames=filter==='all'?games:[filter];
- const container=$('teacherRoomResults');
- container.innerHTML=groupNames.map(g=>{const items=visible.filter(([,r])=>kind(r)===g);const isBoat=/perahu/i.test(g);const perahu=isBoat?boat:[];
- const score=items.reduce((sum,[,r])=>sum+(Number(r.score)||0),0);
- const entries=items.map(([id,r])=>'<div class="roomEntry"><b>'+esc(r.student||r.name||'Siswa')+'</b> · Nilai '+esc(r.score??0)+'<div>'+(Array.isArray(r.answers)?r.answers.map((a,i)=>'<div style="padding:6px;border-top:1px solid #ffffff22">'+esc(a.question||a.q||'Soal '+(i+1))+' → '+esc(a.selected??a.answerText??a.answer??'-')+' <button type="button" data-delete-result="'+esc(id)+'" data-answer-index="'+i+'">Hapus jawaban soal</button></div>').join(''):'')+'</div><button type="button" data-delete-result="'+esc(id)+'">Hapus hasil siswa</button></div>').join('');
- const boatEntries=perahu.map(({roundId,answerId,a})=>'<div class="roomEntry"><b>'+esc(a.name||'Siswa')+'</b> · Tim '+esc(a.team||'-')+' · '+esc(a.question||'Soal '+roundId)+' → '+esc(a.selected??a.answer??'-')+' · '+esc(a.points??0)+' poin <button type="button" data-delete-round="'+esc(roundId)+'" data-delete-answer="'+esc(answerId)+'">Hapus jawaban</button></div>');
- return '<section class="roomBox" style="margin-bottom:12px"><h3 style="margin-top:0">🎮 '+esc(g)+' · Kode '+esc(activeCode())+'</h3><p>'+items.length+' hasil siswa · Total nilai hasil '+score+(isBoat?' · '+perahu.length+' jawaban perahu':'')+'</p>'+(entries.join('')+boatEntries.join('')||'<p>Belum ada jawaban untuk game dan kode soal ini.</p>')+'</section>';}).join('')||'<div class="roomBox">Belum ada hasil untuk kode soal '+esc(activeCode())+'.</div>';
- const score={A:0,B:0};const matches={};boat.forEach(({a})=>{const t=String(a.team||'').toUpperCase();if((t==='A'||t==='B')&&a.correct===true){const pts=Number(a.points)||0;score[t]+=pts;const match=String(a.matchId||'Tanpa ID');(matches[match]??={A:0,B:0})[t]+=pts;}});
- const showBoat=/perahu/i.test(filter);
- $('teacherBoatTotal').style.display=showBoat?'block':'none';
- $('teacherBoatTotal').innerHTML='<h3>🚤 Nilai Tim Game Perahu · '+esc(activeCode())+'</h3><div style="display:flex;gap:12px;flex-wrap:wrap"><div class="roomEntry" style="flex:1"><b>TIM A</b><div style="font-size:30px;font-weight:900">'+score.A+' poin</div></div><div class="roomEntry" style="flex:1"><b>TIM B</b><div style="font-size:30px;font-weight:900">'+score.B+' poin</div></div></div>'+(Object.keys(matches).length>1?'<p>Per pertandingan: '+Object.entries(matches).map(([id,v])=>esc(id)+': A '+v.A+' / B '+v.B).join(' · ')+'</p>':'');
-
- $('teacherRoomCount').textContent='Kode '+activeCode()+' · '+onlinePlayers.length+' siswa online · '+visible.length+' hasil · '+(showBoat?boat.length:0)+' jawaban perahu';
- renderLiveAnswers();
+(function(){
+'use strict';
+const $=id=>document.getElementById(id), escLive=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let liveRefs=[], liveKey='', liveRoomData={players:{},boatPlayers:{},boatMatch:null,liveAnswers:{},results:{},raceRounds:{},chat:{}};
+function db(){return window.firebaseDB||null}
+function keyPart(v){return String(v||'').trim().toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)}
+function roomKey(){return keyPart([ $('teacherLiveSchool')?.value||'', $('teacherLiveClass')?.value||'', ($('teacherLiveCode')?.value||'').trim().toUpperCase()].join('|'))||'umum'}
+function stopWatch(){const d=db();if(d)liveRefs.forEach(([path,fn])=>d.ref(path).off('value',fn));liveRefs=[];liveKey=''}
+function watch(path,field){const d=db();if(!d)return;const fn=s=>{liveRoomData[field]=s.val()||{};render();};d.ref(path).on('value',fn,err=>{const n=$('teacherGameLiveStatus');if(n)n.textContent='Gagal membaca '+field+' dari Firebase: '+(err?.message||'izin database');});liveRefs.push([path,fn]);}
+function flatAnswers(){const rows=Object.values(liveRoomData.liveAnswers||{}).filter(Boolean);Object.entries(liveRoomData.raceRounds||{}).forEach(([roundId,round])=>Object.values(round?.answers||{}).forEach(a=>{if(a)rows.push({...a,game:'Game Perahu',questionIndex:a.questionIndex??roundId,student:a.student||a.name,selected:a.selected??a.answerText??a.answer,at:a.at||0,team:a.team||''})}));return rows.sort((a,b)=>Number(a.at||0)-Number(b.at||0));}
+function render(){const root=$('teacherGameLivePanel');if(!root)return;const now=Date.now();const allPlayers=Object.entries(liveRoomData.players||{}).map(([id,p])=>({...p,_id:id})).filter(p=>p&&p.status!=='Offline'&&now-(Number(p.lastSeen)||now)<60000);const boatPlayers=Object.entries(liveRoomData.boatPlayers||{}).map(([id,p])=>({...p,_id:id})).filter(p=>p&&now-(Number(p.at)||now)<45000);const merged=new Map();allPlayers.forEach(p=>merged.set(String(p.name||p._id)+'|'+String(p.className||''),p));boatPlayers.forEach(p=>{const k=String(p.name||p._id)+'|'+String($('teacherLiveClass')?.value||'');const old=merged.get(k)||{};merged.set(k,{...old,...p,name:p.name||old.name,team:p.team||old.team,role:'student',status:old.status|| (p.ready?'Siap bermain':'Di ruang Perahu'),isPlaying:true});});const players=[...merged.values()];const answers=flatAnswers();const results=Object.values(liveRoomData.results||{}).filter(Boolean);const match=liveRoomData.boatMatch||{};const statusText=match.status==='playing'?'Pertandingan Perahu sedang berlangsung':match.status==='countdown'?'Persiapan/countdown pertandingan Perahu':match.status==='finished'?'Pertandingan Perahu selesai':'Menunggu atau tidak ada pertandingan Perahu';
+ const playerCards=players.map(p=>'<article class="liveStudentCard"><h4>👤 '+escLive(p.name||'Siswa')+'</h4><span class="liveTag">'+escLive(p.status||'Online')+'</span>'+(p.team?'<span class="liveTag">TIM '+escLive(p.team)+'</span>':'')+'<p><b>Game:</b> '+escLive(p.gameName||p.game||'Petualangan')+'</p><p><b>Soal:</b> '+escLive(p.questionNumber||((Number(p.answeredIndex)||0)+1)||0)+' / '+escLive(p.totalQuestions||'—')+'</p><p><b>Pertanyaan saat ini:</b> '+escLive(p.currentQuestion||'Menunggu soal/jawaban')+'</p><p><b>Skor:</b> '+escLive(p.score??0)+' poin</p>'+(p.lastAnswer?'<p><b>Jawaban terakhir:</b> '+escLive(p.lastAnswer.selected||p.lastAnswer.answer||'—')+'</p>':'')+'<p><small>Aktif terakhir: '+escLive(new Date(Number(p.lastSeen||p.at)||now).toLocaleTimeString('id-ID'))+'</small></p></article>').join('');
+ const answerRows=answers.slice().reverse().slice(0,250).map(a=>'<tr><td>'+escLive(a.student||a.name||'Siswa')+'</td><td>'+escLive(a.game||a.type||'Game')+'</td><td>'+escLive((Number(a.questionIndex)||0)+1)+'</td><td>'+escLive(a.question||'')+'</td><td>'+escLive(a.selected??a.answerText??a.answer??'—')+'</td><td>'+(a.correct===true||a.isCorrect===true?'Benar':a.correct===false||a.isCorrect===false?'Salah':'—')+'</td><td>'+escLive(a.points??0)+'</td><td>'+escLive(a.team||'—')+'</td></tr>').join('');
+ const resultRows=results.map(r=>'<tr><td>'+escLive(r.student||r.name||'Siswa')+'</td><td>'+escLive(r.type||'Game')+'</td><td>'+escLive(r.score??0)+'</td><td>'+escLive(r.completed?'Selesai':'Belum selesai')+'</td><td>'+escLive(r.createdAt||'')+'</td><td>'+escLive(r.teamScores?.A??'—')+'</td><td>'+escLive(r.teamScores?.B??'—')+'</td></tr>').join('');
+ const target=$('teacherGameLiveContent');if(!target)return;target.innerHTML='<div class="liveNotice"><b>Terhubung ke ruang:</b> '+escLive(liveKey)+'<br><b>Siswa terlihat:</b> '+players.length+' · <b>Jawaban realtime:</b> '+answers.length+' · <b>Hasil akhir tersimpan:</b> '+results.length+'<br><b>Status game tim:</b> '+escLive(statusText)+(match.questionIndex!=null?' · Soal '+(Number(match.questionIndex)+1):'')+(match.scoreA!=null?' · TIM A '+match.scoreA+' poin':'')+(match.scoreB!=null?' · TIM B '+match.scoreB+' poin':'')+'</div><h4>🖥️ Siswa yang sedang bermain — pembaruan langsung</h4><div class="liveGrid">'+(playerCards||'<p>Belum ada siswa aktif di ruang ini. Pastikan sekolah, kelas, dan kode sama dengan yang dimasukkan siswa.</p>')+'</div><h4>⚡ Jawaban semua siswa (terbaru dahulu)</h4><div class="liveTableWrap"><table><thead><tr><th>Nama</th><th>Game</th><th>Soal</th><th>Pertanyaan</th><th>Jawaban</th><th>Hasil</th><th>Poin</th><th>Tim</th></tr></thead><tbody>'+(answerRows||'<tr><td colspan="8">Menunggu siswa menjawab.</td></tr>')+'</tbody></table></div><h4>🏆 Hasil akhir</h4><div class="liveTableWrap"><table><thead><tr><th>Nama</th><th>Game</th><th>Skor</th><th>Status</th><th>Waktu</th><th>Tim A</th><th>Tim B</th></tr></thead><tbody>'+(resultRows||'<tr><td colspan="7">Belum ada hasil akhir tersimpan.</td></tr>')+'</tbody></table></div>';
+ window.__teacherGameLiveExport={players,answers,results,room:liveKey,boatMatch:match};
 }
-
-function ensure(){if($('teacherRoomView'))return;const div=document.createElement('section');div.id='teacherRoomView';div.className='hidden';div.innerHTML='<div class="teacherRoomTop"><button type="button" id="teacherRoomBack">↩ Kembali ke Panel Guru</button><h2 style="margin:0">🎮 Ruang Game Siswa · Pemantauan Realtime</h2></div><p id="teacherRoomCount"></p><p id="teacherRoomError" style="color:#ffd54f"></p><label for="teacherRoomFilter">Pilih game untuk melihat atau menghapus jawaban</label><select id="teacherRoomFilter"><option value="all">Semua game</option></select><div class="actions"><button type="button" class="good" id="teacherRoomDownload">⬇️ Download Jawaban Sesuai Kode Soal (CSV)</button><button type="button" class="danger" id="teacherRoomDeleteAll">🗑️ Hapus semua jawaban game terpilih</button></div><div id="teacherBoatTotal" class="roomBox" style="margin:12px 0"></div><div class="roomGrid"><div class="roomBox"><h3>👥 Siswa Online</h3><div id="teacherRoomPlayers"></div></div><div class="roomBox"><h3>📊 Hasil Setiap Game Berdasarkan Kode Soal</h3><div id="teacherRoomResults"></div></div></div><div class="roomBox" style="margin-top:12px"><h3>⚡ Jawaban Siswa Langsung · Semua Game</h3><div id="teacherRoomLiveAnswers">Menunggu jawaban siswa…</div></div>';document.body.appendChild(div);
- $('teacherRoomBack').onclick=close;$('teacherRoomFilter').onchange=e=>{filter=e.target.value;render()};
- div.addEventListener('click',async e=>{const result=e.target.closest('[data-delete-result]'),answer=e.target.closest('[data-delete-answer]');if(!result&&!answer)return;const path=result?'results/'+result.dataset.deleteResult:'raceRounds/'+answer.dataset.deleteRound+'/answers/'+answer.dataset.deleteAnswer;if(!confirm('Hapus jawaban siswa ini dari Firebase secara permanen?'))return;try{const ref=db().ref(currentRoom+'/'+path);if(result&&result.hasAttribute('data-answer-index')){const idx=Number(result.dataset.answerIndex);const tx=await ref.transaction(v=>{if(!v||!Array.isArray(v.answers)||idx<0||idx>=v.answers.length)return;const answers=v.answers.slice();answers.splice(idx,1);return {...v,answers,score:answers.reduce((sum,a)=>sum+(Number(a.points)||0),0)}});if(!tx.committed)throw Error('Jawaban tidak ditemukan atau sudah berubah.')}else await ref.remove()}catch(err){alert('Gagal menghapus: '+err.message)}});
- $('teacherRoomDownload').onclick=()=>{if(!currentRoom){alert('Masuk ruang game terlebih dahulu.');return}const code=($('teacherLiveCode')?.value||'').trim();if(!code){alert('Masukkan kode soal terlebih dahulu.');return}const school=($('teacherLiveSchool')?.value||'').trim(),cls=($('teacherLiveClass')?.value||'').trim();const rows=[];const add=(r,a,game,team,match,round)=>{rows.push([school,cls,code,game,r.student||r.name||a.name||'',team||'',match||'',round||'',a.question||a.q||'',a.selected??a.answerText??a.answer??'',a.correctAnswer||'',a.isCorrect===true||a.correct===true?'Benar':a.isCorrect===false||a.correct===false?'Salah':'',a.points??'',r.score??'',a.at?new Date(a.at).toISOString():r.createdAt||'']);};Object.values(results).forEach(r=>{if(!codeMatches(r))return;if(filter!=='all'&&kind(r)!==filter)return;const answers=Array.isArray(r.answers)?r.answers:[];if(!answers.length)add(r,{},kind(r),'','','');else answers.forEach(a=>add(r,a,kind(r),'','',''));});if(filter==='all'||/perahu/i.test(filter)){Object.entries(rounds).forEach(([rid,r])=>Object.values(r?.answers||{}).forEach(a=>{if(!codeMatches(a,r))return;add(a,a,'Game Perahu',a.team,a.matchId,rid)}));}if(!rows.length){alert('Tidak ada jawaban Firebase untuk kode soal dan game yang dipilih.');return}const headers=['Sekolah','Kelas','Kode soal','Game','Nama siswa','Tim','ID pertandingan','Ronde','Pertanyaan','Jawaban siswa','Jawaban benar','Status','Poin jawaban','Skor hasil','Waktu'];const csv='\ufeff'+[headers,...rows].map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='jawaban_'+code.replace(/[^a-z0-9_-]/gi,'_')+'_'+(filter==='all'?'semua_game':filter.replace(/[^a-z0-9_-]/gi,'_'))+'.csv';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};
- $('teacherRoomDeleteAll').onclick=async()=>{const ids=filteredResults().map(([id])=>id);const boat=filter==='all'||/perahu/i.test(filter);const changes={};ids.forEach(id=>changes['results/'+id]=null);if(boat)filteredBoat().forEach(({roundId,answerId})=>changes['raceRounds/'+roundId+'/answers/'+answerId]=null);if(filter==='all'||/balon|ice breaking|icebreak|game perahu|perahu/i.test(filter))Object.entries(liveAnswers||{}).filter(([,a])=>codeMatches(a)&&(filter==='all'||String(a.game||'')===filter||String(a.type||'')===filter||(filter==='pg'&&a.game==='Balon Udara')||(filter==='icebreak'&&a.game==='Ice Breaking')||((filter==='isian'||/perahu/i.test(filter))&&a.game==='Game Perahu'))).forEach(([id])=>changes['liveAnswers/'+id]=null);if(!Object.keys(changes).length){alert('Tidak ada jawaban pada game terpilih.');return}if(!confirm('Hapus '+Object.keys(changes).length+' data jawaban dari Firebase? Tidak dapat dibatalkan.'))return;try{await db().ref(currentRoom).update(changes)}catch(err){alert('Gagal menghapus: '+err.message)}};
-}
-function open(){ensure();if(!db()){alert('Firebase belum tersambung.');return}const school=$('teacherLiveSchool')?.value.trim(),code=$('teacherLiveCode')?.value.trim();if(!school||!code||!$('teacherLiveClass')?.value.trim()){alert('Isi nama sekolah, kelas, dan kode soal sama persis dengan yang digunakan siswa.');return}close();currentRoom='pgroRantingDua/liveRooms/'+roomKey();opened=true;$('teacherRoomView').classList.remove('hidden');filter='all';results={};rounds={};players={};watch(currentRoom+'/results',v=>{results=v;render()});watch(currentRoom+'/raceRounds',v=>{rounds=v;render()});watch(currentRoom+'/players',v=>{players=v;render()});watch(currentRoom+'/liveAnswers',v=>{liveAnswers=v;renderLiveAnswers();render()});render()}
-// Capture before legacy handlers, so the old teacher panel cannot be overwritten by its live-player listener.
-document.addEventListener('click',e=>{const btn=e.target.closest('#teacherJoinLive');if(btn){e.preventDefault();e.stopImmediatePropagation();open()}const del=e.target.closest('#deleteGameResults');if(del){e.preventDefault();e.stopImmediatePropagation();open();}},true);
-setInterval(()=>{if(opened)render()},5000);
-window.addEventListener('pagehide',close);
+function csvCell(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
+function download(){const data=window.__teacherGameLiveExport||{answers:[],results:[],players:[],room:liveKey};const rows=[['Jenis data','Ruang','Nama siswa','Game','Tim','Nomor soal','Pertanyaan','Jawaban siswa','Benar/Salah','Poin','Skor akhir','Waktu','Status']];(data.answers||[]).forEach(a=>rows.push(['Jawaban realtime',data.room,a.student||a.name||'',a.game||a.type||'',a.team||'',(Number(a.questionIndex)||0)+1,a.question||'',a.selected??a.answerText??a.answer??'',a.correct===true||a.isCorrect===true?'Benar':a.correct===false||a.isCorrect===false?'Salah':'',a.points??'', '',a.at?new Date(Number(a.at)).toISOString():'','']));(data.results||[]).forEach(r=>{const ans=Array.isArray(r.answers)?r.answers:[];if(!ans.length)rows.push(['Hasil akhir',data.room,r.student||r.name||'',r.type||'', '', '', '', '', '', '',r.score??0,r.createdAt||'',r.completed?'Selesai':'Belum selesai']);else ans.forEach(a=>rows.push(['Hasil akhir',data.room,r.student||r.name||'',r.type||a.type||'',a.team||'',(Number(a.questionIndex)||0)+1,a.question||a.q||'',a.selected??a.answerText??a.answer??'',a.correct===true||a.isCorrect===true?'Benar':a.correct===false||a.isCorrect===false?'Salah':'',a.points??'',r.score??0,r.createdAt||'',r.completed?'Selesai':'Belum selesai']))});const csv='\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download='hasil-pantau-game-'+(data.room||'kelas')+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+function ensurePanel(){const screen=$('teacherScreen');if(!screen||$('teacherGameLivePanel'))return;const panel=document.createElement('section');panel.id='teacherGameLivePanel';panel.className='card';panel.innerHTML='<h3>🎮 Ruang Pantau Game — Guru sebagai Pengamat Langsung</h3><p>Masuk ke ruang Firebase yang sama dengan siswa. Panel ini menampilkan aktivitas, soal saat ini, jawaban, skor, status pertandingan tim, dan hasil yang tersimpan secara realtime.</p><div class="liveToolbar"><div><label for="teacherLiveSchool">Nama sekolah</label><input id="teacherLiveSchool" placeholder="Sama seperti akun siswa"></div><div><label for="teacherLiveClass">Kelas</label><input id="teacherLiveClass" placeholder="Contoh: 4A"></div><div><label for="teacherLiveCode">Kode soal/game</label><input id="teacherLiveCode" placeholder="Kode yang digunakan siswa"></div></div><div class="actions"><button type="button" class="primary" id="teacherJoinLive">Masuk dan pantau realtime</button><button type="button" class="ghost" id="teacherDownloadLive" disabled>⬇️ Download hasil CSV</button><button type="button" class="ghost" id="teacherLeaveLive" disabled>Keluar dari ruang</button></div><p id="teacherGameLiveStatus" class="small">Belum terhubung ke ruang game.</p><div id="teacherGameLiveContent"></div>';const content=screen.querySelector('.content');if(content)content.appendChild(panel);$('teacherJoinLive').onclick=join;$('teacherDownloadLive').onclick=download;$('teacherLeaveLive').onclick=()=>{stopWatch();$('teacherGameLiveContent').innerHTML='';$('teacherGameLiveStatus').textContent='Keluar dari ruang pantau.';$('teacherJoinLive').disabled=false;$('teacherLeaveLive').disabled=true;$('teacherDownloadLive').disabled=true};}
+function join(){const school=$('teacherLiveSchool')?.value.trim(),cls=$('teacherLiveClass')?.value.trim(),code=$('teacherLiveCode')?.value.trim().toUpperCase();if(!school||!code){alert('Isi nama sekolah dan kode game sesuai data siswa.');return}if(!db()){alert('Firebase belum terhubung. Ruang pantau realtime membutuhkan Firebase.');return}stopWatch();window.__onlineSchool=school;window.__onlineClass=cls||window.currentTeacher?.className||'';window.__onlineCode=code;const key=roomKey();liveKey=key;liveRoomData={players:{},boatPlayers:{},boatMatch:null,liveAnswers:{},results:{},raceRounds:{},chat:{}};const base='pgroRantingDua/liveRooms/'+key;watch(base+'/players','players');watch(base+'/boatPlayers','boatPlayers');watch(base+'/boatMatch','boatMatch');watch(base+'/liveAnswers','liveAnswers');watch(base+'/results','results');watch(base+'/raceRounds','raceRounds');$('teacherGameLiveStatus').textContent='Terhubung ke ruang game. Menunggu aktivitas siswa…';$('teacherJoinLive').disabled=true;$('teacherLeaveLive').disabled=false;$('teacherDownloadLive').disabled=false;render();}
+const observer=new MutationObserver(()=>{if(!$('teacherScreen')?.classList.contains('hidden'))ensurePanel()});observer.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});document.addEventListener('DOMContentLoaded',ensurePanel);setTimeout(ensurePanel,1000);
 })();
 </script>
 </body>
@@ -2598,21 +2569,94 @@ function armBalloon(balloon){if(balloon.dataset.fuseArmed==='1'||balloon.classLi
 function watchBalloons(){const layer=$('iceBreakLayer');if(!layer)return;if(balloonObserver)balloonObserver.disconnect();[...layer.querySelectorAll('.iceBalloon')].forEach(armBalloon);balloonObserver=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){if(n.matches?.('.iceBalloon'))armBalloon(n);n.querySelectorAll?.('.iceBalloon').forEach(armBalloon)}})));balloonObserver.observe(layer,{childList:true,subtree:true});}
 document.addEventListener('click',e=>{const b=e.target.closest('#iceBreakLayer .iceBalloon');if(!b)return;setTimeout(()=>{if(!iceIsRunning()||b.dataset.respawnScheduled==='1')return;if(!b.isConnected||b.classList.contains('popped')){b.dataset.respawnScheduled='1';b.remove();spawnReplacement(b);}},500);},true);
 const iceWatch=new MutationObserver(()=>{if(iceIsRunning())watchBalloons();});iceWatch.observe($('iceBreakLayer'),{childList:true});setInterval(()=>{if(iceIsRunning())watchBalloons();},1500);
-// Tambahkan hasil rinci Game Perahu pada panel guru setelah panel ruang dibuat.
-async function addTeacherRaceDetails(){
- const box=$('teacherLiveResults'),d=window.firebaseDB;if(!box||!d||!$('teacherLiveCode'))return;
- const key=[($('teacherLiveSchool')?.value||'').trim(),($('teacherLiveClass')?.value||'').trim(),($('teacherLiveCode')?.value||'').trim().toUpperCase()].join('|').toLowerCase().replace(/[^a-z0-9_-]+/g,'_').slice(0,180)||'umum';
- try{
- const base=d.ref('pgroRantingDua/liveRooms/'+key);
- const [raceSnap,resultSnap]=await Promise.all([base.child('raceRounds').once('value'),base.child('results').once('value')]);
- const entries=[];
- Object.entries(raceSnap.val()||{}).forEach(([round,data])=>Object.values(data?.answers||{}).forEach(a=>entries.push({name:a.name,game:'Game Perahu',round:Number(round)+1,question:a.question,selected:a.selected,correct:a.correct,points:a.points,team:a.team,at:a.at})));
- Object.values(resultSnap.val()||{}).forEach(r=>{(Array.isArray(r.answers)?r.answers:[]).forEach((a,i)=>{if(a.type==='boat-race')return;entries.push({name:r.student||r.name,game:r.type||a.type||'Game',round:i+1,question:a.question||a.q,selected:a.selected||a.answerText||a.answer,correct:a.isCorrect??a.correct,points:a.points??0,at:a.at||r.createdAt})});});
- entries.sort((a,b)=>String(a.at||'').localeCompare(String(b.at||'')));
- let detail=document.getElementById('teacherRaceDetailResults');if(!detail){detail=document.createElement('div');detail.id='teacherRaceDetailResults';box.appendChild(detail)}
- detail.innerHTML='<h3>📚 Rincian Jawaban Seluruh Game ('+entries.length+')</h3>'+(entries.length?entries.map(a=>'<div style="padding:8px;border-bottom:1px solid #cbd5e1"><b>'+escSafe(a.name||'Siswa')+'</b> · '+escSafe(a.game)+' · Soal '+a.round+(a.team?' · TIM '+escSafe(a.team):'')+'<br>'+escSafe(a.question||'')+'<br>Jawaban: '+escSafe(a.selected||'—')+' · '+(a.correct?'✅ Benar':'❌ Salah')+' · '+escSafe(a.points||0)+' poin</div>').join(''):'<p>Belum ada jawaban siswa tersimpan pada ruang ini.</p>');
- }catch(e){console.warn('Gagal memuat rincian jawaban seluruh game',e);}
+// ===== Materi PDF online: Firebase Storage + Realtime Database =====
+const MATERIALS_PATH='pgroRantingDua/materials';
+let learningMaterials={};
+const materialText=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function materialOwnerMatches(m){
+ return !!currentTeacher && String(m.teacherId||'')===String(currentTeacher.id||'') &&
+  (!m.school||String(m.school)===String(currentTeacher.school||'')) &&
+  (!m.className||String(m.className)===String(currentTeacher.className||''));
 }
+function renderPublicMaterials(){
+ const box=document.getElementById('publicMaterialsList');if(!box)return;
+ const items=Object.entries(learningMaterials||{}).map(([id,m])=>({...m,id}))
+  .filter(m=>m&&m.url).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+ if(!items.length){box.innerHTML='<div class="empty">Belum ada materi PDF yang diunggah guru.</div>';return;}
+ box.innerHTML=items.map(m=>`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px;margin:8px 0;border-radius:13px;background:#ffffff12;border:1px solid #ffffff25"><div style="font-size:28px">📄</div><div style="flex:1;min-width:180px"><b>${materialText(m.title||'Materi PDF')}</b><div class="small">${materialText(m.subject||'Materi pembelajaran')}${m.school?' · '+materialText(m.school):''}${m.className?' · '+materialText(m.className):''}</div>${m.description?`<div class="small">${materialText(m.description)}</div>`:''}</div><button class="good" onclick="openPdfReader('${encodeURIComponent(m.id)}')">Baca Materi</button></div>`).join('');
+}
+function renderTeacherMaterials(){
+ const box=document.getElementById('teacherMaterialsList');if(!box)return;
+ const items=Object.entries(learningMaterials||{}).map(([id,m])=>({...m,id})).filter(materialOwnerMatches)
+  .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+ if(!items.length){box.innerHTML='<div class="empty">Anda belum mengunggah materi.</div>';return;}
+ box.innerHTML=items.map(m=>`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;margin:7px 0;border:1px solid #ffffff20;border-radius:12px"><div style="flex:1;min-width:180px"><b>${materialText(m.title||'Materi PDF')}</b><div class="small">${materialText(m.subject||'')} · PDF</div></div><div class="rowBtns"><button class="ghost" onclick="openPdfReader('${encodeURIComponent(m.id)}')">Lihat</button><button class="danger" onclick="deleteLearningMaterial('${encodeURIComponent(m.id)}')">Hapus</button></div></div>`).join('');
+}
+window.openPdfReader=idEncoded=>{
+ const id=decodeURIComponent(idEncoded||'');const m=learningMaterials[id];
+ if(!m||!m.url)return alert('Materi tidak ditemukan atau tautannya belum tersedia.');
+ document.getElementById('pdfReaderTitle').textContent='📄 '+(m.title||'Materi PDF');
+ document.getElementById('pdfReaderFrame').src=m.url;
+ document.getElementById('pdfReaderModal').classList.remove('hidden');
+};
+window.closePdfReader=()=>{
+ document.getElementById('pdfReaderModal').classList.add('hidden');
+ document.getElementById('pdfReaderFrame').src='about:blank';
+};
+window.uploadLearningMaterial=async()=>{
+ const title=document.getElementById('materialTitle').value.trim();
+ const subject=document.getElementById('materialSubject').value.trim();
+ const description=document.getElementById('materialDescription').value.trim();
+ const file=document.getElementById('materialPdfFile').files?.[0];
+ const statusBox=document.getElementById('teacherMaterialsStatus');
+ const btn=document.getElementById('uploadMaterialBtn');
+ if(!currentTeacher)return alert('Silakan login sebagai guru terlebih dahulu.');
+ if(!title||!subject)return alert('Judul materi dan mata pelajaran wajib diisi.');
+ if(!file)return alert('Pilih file PDF terlebih dahulu.');
+ if(!(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')))return alert('File harus berformat PDF.');
+ if(file.size>20*1024*1024)return alert('Ukuran PDF maksimal 20 MB.');
+ const db=window.firebaseDB;
+ if(!db||!window.firebase||typeof firebase.storage!=='function')return alert('Firebase Storage belum tersedia. Pastikan SDK dan layanan Storage Firebase aktif.');
+ btn.disabled=true;btn.textContent='⏳ Mengunggah...';statusBox.textContent='Mengunggah PDF, mohon tunggu...';
+ let storageRef=null;
+ try{
+  const id='mat_'+Date.now()+'_'+Math.random().toString(36).slice(2,9);
+  storageRef=firebase.storage().ref('learning-materials/'+String(currentTeacher.id||'teacher')+'/'+id+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_'));
+  const snap=await storageRef.put(file,{contentType:'application/pdf'});
+  const url=await snap.ref.getDownloadURL();
+  const record={title,subject,description,url,storagePath:snap.ref.fullPath,teacherId:String(currentTeacher.id||''),teacherName:String(currentTeacher.name||''),school:String(currentTeacher.school||''),className:String(currentTeacher.className||''),createdAt:new Date().toISOString(),fileName:file.name,size:file.size};
+  await db.ref(MATERIALS_PATH+'/'+id).set(record);
+  document.getElementById('materialTitle').value='';document.getElementById('materialSubject').value='';
+  document.getElementById('materialDescription').value='';document.getElementById('materialPdfFile').value='';
+  statusBox.textContent='✅ Materi berhasil diunggah dan tersedia di halaman awal untuk siswa.';
+ }catch(err){
+  console.error('Upload materi PDF gagal:',err);
+  statusBox.textContent='❌ Upload gagal: '+(err.message||err)+' Pastikan Firebase Storage aktif dan Storage Rules mengizinkan upload.';
+ }finally{btn.disabled=false;btn.textContent='☁️ Upload Materi';}
+};
+window.deleteLearningMaterial=async idEncoded=>{
+ const id=decodeURIComponent(idEncoded||'');const m=learningMaterials[id];
+ if(!m||!materialOwnerMatches(m))return alert('Materi ini bukan milik akun guru Anda.');
+ if(!confirm('Hapus materi "'+(m.title||'Materi PDF')+'"?'))return;
+ try{
+  const db=window.firebaseDB;if(!db)throw new Error('Firebase belum terhubung.');
+  await db.ref(MATERIALS_PATH+'/'+id).remove();
+  if(m.storagePath&&typeof firebase.storage==='function'){try{await firebase.storage().ref(m.storagePath).delete()}catch(storageErr){console.warn('Metadata terhapus, file Storage perlu dibersihkan:',storageErr)}}
+ }catch(err){alert('Gagal menghapus materi: '+(err.message||err));}
+};
+function startLearningMaterials(){
+ const db=window.firebaseDB;
+ if(!db){const b=document.getElementById('publicMaterialsList');if(b)b.innerHTML='<div class="empty">Firebase belum terhubung. Periksa koneksi internet.</div>';return;}
+ db.ref(MATERIALS_PATH).on('value',snap=>{
+  learningMaterials=snap.val()||{};
+  renderPublicMaterials();renderTeacherMaterials();
+ },err=>{
+  console.error('Gagal membaca materi PDF:',err);
+  const b=document.getElementById('publicMaterialsList');if(b)b.innerHTML='<div class="empty">Daftar materi tidak dapat dimuat. Periksa izin baca Firebase.</div>';
+ });
+}
+startLearningMaterials();
+
 // Rincian hasil ditampilkan oleh listener Firebase pada ruang guru; tanpa polling DOM.
 
 })();
