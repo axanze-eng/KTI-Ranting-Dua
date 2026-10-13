@@ -6,7 +6,7 @@
 <title>PGRI RANTING DUA • Game Randu Edukasi</title>
 <style>
 *{box-sizing:border-box}
-:root{a
+:root{
   --bg:#07152f;--panel:#102451;--panel2:#17346b;--cyan:#18d7ff;--gold:#ffd34d;
   --green:#39e58c;--red:#ff6078;--text:#f7fbff;--muted:#b9c9e9
 }
@@ -548,6 +548,52 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
 
 /* Hak cipta khusus halaman utama */
 .homeCopyright{margin:22px auto 0;padding:13px 16px;width:100%;background:linear-gradient(135deg,#1262d4,#083b91);border:1px solid #76b8ff;border-radius:14px;color:#fff;text-align:center;font-size:clamp(12px,1.5vw,16px);font-weight:700;line-height:1.5;overflow-wrap:anywhere;box-shadow:0 6px 18px rgba(0,24,80,.25)}
+
+/* ===== PERAPIAN AKHIR: HALAMAN UTAMA & MATERI PDF ===== */
+#home{
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  min-height:100%;
+  height:100%;
+  overflow-x:hidden;
+  overflow-y:auto;
+  padding:clamp(10px,2vw,24px);
+}
+#home .homeHero{
+  flex:0 0 auto;
+  width:min(1040px,100%);
+  max-width:1040px;
+  margin:auto;
+  padding:clamp(14px,2vw,26px);
+}
+#home .heroArt{max-width:100%}
+#home .homeTitle h1{overflow-wrap:anywhere}
+#home .homeTitle p{font-size:clamp(14px,1.5vw,18px)}
+#home #publicMaterialsPanel{
+  width:100%!important;
+  max-width:900px;
+  margin:clamp(12px,1.8vw,20px) auto 0!important;
+  padding:clamp(12px,1.8vw,20px);
+}
+#publicMaterialsList{min-width:0}
+#publicMaterialsList .empty{padding:clamp(14px,2vw,24px);line-height:1.5}
+#materialSchoolFilter,#materialClassFilter{min-width:0;max-width:100%}
+#home .homeFeatures{width:100%;max-width:760px}
+#home .homeCopyright{padding:12px 8px;text-align:center;line-height:1.5}
+@media(max-width:700px){
+  #home{padding:8px;align-items:flex-start}
+  #home .homeHero{width:100%;padding:12px;border-radius:18px}
+  #home .homeFeatures{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #home #publicMaterialsPanel{padding:12px}
+  #publicMaterialsList>div{align-items:flex-start!important}
+  #publicMaterialsList button{width:100%}
+}
+@media(max-width:420px){
+  #home .homeFeatures{grid-template-columns:1fr}
+  #home .homeIdentity span{max-width:100%;overflow-wrap:anywhere}
+}
+
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
@@ -642,8 +688,12 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
   </div>
   <section id="publicMaterialsPanel" class="card" style="width:min(900px,96%);margin:18px auto 0;text-align:left;background:rgba(8,42,75,.92);border:2px solid #ffffff75;border-radius:20px">
    <h3 style="margin:0 0 6px">📚 Materi Pembelajaran PDF</h3>
-   <p style="margin:0 0 12px;color:#d3e6ee">Pilih materi untuk dibaca online sebelum masuk sebagai siswa.</p>
-   <div id="publicMaterialsList"><div class="empty">Memuat daftar materi...</div></div>
+   <p style="margin:0 0 12px;color:#d3e6ee">Pilih nama sekolah dan kelas terlebih dahulu. Materi hanya ditampilkan sesuai pilihan Anda.</p>
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:12px 0 16px">
+    <div><label for="materialSchoolFilter" style="display:block;margin-bottom:5px;color:#fff">🏫 Nama Sekolah</label><select id="materialSchoolFilter" onchange="onMaterialSchoolChange()" style="width:100%;padding:11px;border-radius:10px"><option value="">Pilih nama sekolah…</option></select></div>
+    <div><label for="materialClassFilter" style="display:block;margin-bottom:5px;color:#fff">🎒 Kelas</label><select id="materialClassFilter" onchange="onMaterialClassChange()" style="width:100%;padding:11px;border-radius:10px" disabled><option value="">Pilih kelas…</option></select></div>
+   </div>
+   <div id="publicMaterialsList"><div class="empty">Pilih nama sekolah dan kelas untuk melihat materi PDF.</div></div>
   </section>
   <div class="homeFeatures">
    <div><span>⏱️</span><b>Timer Soal</b><small>Waktu terukur</small></div>
@@ -2571,7 +2621,7 @@ function armBalloon(balloon){if(balloon.dataset.fuseArmed==='1'||balloon.classLi
 function watchBalloons(){const layer=$('iceBreakLayer');if(!layer)return;if(balloonObserver)balloonObserver.disconnect();[...layer.querySelectorAll('.iceBalloon')].forEach(armBalloon);balloonObserver=new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){if(n.matches?.('.iceBalloon'))armBalloon(n);n.querySelectorAll?.('.iceBalloon').forEach(armBalloon)}})));balloonObserver.observe(layer,{childList:true,subtree:true});}
 document.addEventListener('click',e=>{const b=e.target.closest('#iceBreakLayer .iceBalloon');if(!b)return;setTimeout(()=>{if(!iceIsRunning()||b.dataset.respawnScheduled==='1')return;if(!b.isConnected||b.classList.contains('popped')){b.dataset.respawnScheduled='1';b.remove();spawnReplacement(b);}},500);},true);
 const iceWatch=new MutationObserver(()=>{if(iceIsRunning())watchBalloons();});iceWatch.observe($('iceBreakLayer'),{childList:true});setInterval(()=>{if(iceIsRunning())watchBalloons();},1500);
-// ===== Materi PDF online: Firebase Storage + Realtime Database =====
+// ===== Materi PDF online: file dan metadata disimpan langsung di Firebase Realtime Database =====
 const MATERIALS_PATH='pgroRantingDua/materials';
 let learningMaterials={};
 const materialText=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -2581,11 +2631,43 @@ function materialOwnerMatches(m){
   (!m.school||String(m.school)===String(teacher.school||'')) &&
   (!m.className||String(m.className)===String(teacher.className||''));
 }
+function populateMaterialFilters(){
+ const schoolSel=document.getElementById('materialSchoolFilter');
+ const classSel=document.getElementById('materialClassFilter');
+ if(!schoolSel||!classSel)return;
+ const records=Object.values(learningMaterials||{}).filter(m=>m&&(m.dataPath||m.url));
+ const schools=[...new Set(records.map(m=>String(m.school||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'id'));
+ const previousSchool=schoolSel.value;
+ schoolSel.innerHTML='<option value="">Pilih nama sekolah…</option>'+schools.map(s=>`<option value="${materialText(s)}">${materialText(s)}</option>`).join('');
+ schoolSel.value=schools.includes(previousSchool)?previousSchool:'';
+ updateMaterialClassOptions();
+}
+function updateMaterialClassOptions(){
+ const schoolSel=document.getElementById('materialSchoolFilter');
+ const classSel=document.getElementById('materialClassFilter');
+ if(!schoolSel||!classSel)return;
+ const school=schoolSel.value;
+ const previousClass=classSel.value;
+ const classes=[...new Set(Object.values(learningMaterials||{}).filter(m=>m&&(m.dataPath||m.url)&&String(m.school||'').trim()===school).map(m=>String(m.className||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'id'));
+ classSel.innerHTML='<option value="">Pilih kelas…</option>'+classes.map(c=>`<option value="${materialText(c)}">${materialText(c)}</option>`).join('');
+ classSel.disabled=!school||!classes.length;
+ classSel.value=classes.includes(previousClass)?previousClass:'';
+}
+window.onMaterialSchoolChange=()=>{
+ updateMaterialClassOptions();
+ renderPublicMaterials();
+};
+window.onMaterialClassChange=()=>renderPublicMaterials();
 function renderPublicMaterials(){
  const box=document.getElementById('publicMaterialsList');if(!box)return;
+ const school=document.getElementById('materialSchoolFilter')?.value||'';
+ const cls=document.getElementById('materialClassFilter')?.value||'';
+ if(!school){box.innerHTML='<div class="empty">🏫 Silakan pilih nama sekolah terlebih dahulu. Materi masih disembunyikan.</div>';return;}
+ if(!cls){box.innerHTML='<div class="empty">🎒 Silakan pilih kelas untuk menampilkan materi dari '+materialText(school)+'.</div>';return;}
  const items=Object.entries(learningMaterials||{}).map(([id,m])=>({...m,id}))
-  .filter(m=>m&&m.url).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
- if(!items.length){box.innerHTML='<div class="empty">Belum ada materi PDF yang diunggah guru.</div>';return;}
+  .filter(m=>m&&(m.url||m.dataPath)&&String(m.school||'').trim()===school&&String(m.className||'').trim()===cls)
+  .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+ if(!items.length){box.innerHTML='<div class="empty">Belum ada materi PDF untuk '+materialText(school)+' — '+materialText(cls)+'.</div>';return;}
  box.innerHTML=items.map(m=>`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px;margin:8px 0;border-radius:13px;background:#ffffff12;border:1px solid #ffffff25"><div style="font-size:28px">📄</div><div style="flex:1;min-width:180px"><b>${materialText(m.title||'Materi PDF')}</b><div class="small">${materialText(m.subject||'Materi pembelajaran')}${m.school?' · '+materialText(m.school):''}${m.className?' · '+materialText(m.className):''}</div>${m.description?`<div class="small">${materialText(m.description)}</div>`:''}</div><button class="good" onclick="openPdfReader('${encodeURIComponent(m.id)}')">Baca Materi</button></div>`).join('');
 }
 function renderTeacherMaterials(){
@@ -2595,83 +2677,79 @@ function renderTeacherMaterials(){
  if(!items.length){box.innerHTML='<div class="empty">Anda belum mengunggah materi.</div>';return;}
  box.innerHTML=items.map(m=>`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;margin:7px 0;border:1px solid #ffffff20;border-radius:12px"><div style="flex:1;min-width:180px"><b>${materialText(m.title||'Materi PDF')}</b><div class="small">${materialText(m.subject||'')} · PDF</div></div><div class="rowBtns"><button class="ghost" onclick="openPdfReader('${encodeURIComponent(m.id)}')">Lihat</button><button class="danger" onclick="deleteLearningMaterial('${encodeURIComponent(m.id)}')">Hapus</button></div></div>`).join('');
 }
-window.openPdfReader=idEncoded=>{
+let activeMaterialPdfUrl='';
+window.openPdfReader=async idEncoded=>{
  const id=decodeURIComponent(idEncoded||'');const m=learningMaterials[id];
- if(!m||!m.url)return alert('Materi tidak ditemukan atau tautannya belum tersedia.');
- document.getElementById('pdfReaderTitle').textContent='📄 '+(m.title||'Materi PDF');
- document.getElementById('pdfReaderFrame').src=m.url;
- document.getElementById('pdfReaderModal').classList.remove('hidden');
+ if(!m||(!m.url&&!m.dataPath))return alert('Materi tidak ditemukan atau tautannya belum tersedia.');
+ const title=document.getElementById('pdfReaderTitle'),frame=document.getElementById('pdfReaderFrame'),modal=document.getElementById('pdfReaderModal');
+ title.textContent='📄 '+(m.title||'Materi PDF');modal.classList.remove('hidden');
+ if(m.url){frame.src=m.url;return;}
+ frame.src='about:blank';title.textContent='📄 '+(m.title||'Materi PDF')+' — memuat…';
+ try{
+  const db=window.firebaseDB;if(!db)throw new Error('Firebase Realtime Database belum terhubung.');
+  const snap=await db.ref(m.dataPath).once('value');const payload=snap.val();
+  if(!payload||!payload.base64)throw new Error('Isi PDF tidak ditemukan di Firebase.');
+  const raw=atob(payload.base64),bytes=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+  const blob=new Blob([bytes],{type:'application/pdf'});
+  if(activeMaterialPdfUrl)URL.revokeObjectURL(activeMaterialPdfUrl);
+  activeMaterialPdfUrl=URL.createObjectURL(blob);frame.src=activeMaterialPdfUrl;
+  title.textContent='📄 '+(m.title||'Materi PDF');
+ }catch(err){console.error('Gagal membuka PDF dari Firebase:',err);modal.classList.add('hidden');alert('PDF tidak dapat dibuka: '+(err.message||err)+'\nPastikan Realtime Database Rules mengizinkan membaca data materi.');}
 };
 window.closePdfReader=()=>{
  document.getElementById('pdfReaderModal').classList.add('hidden');
  document.getElementById('pdfReaderFrame').src='about:blank';
+ if(activeMaterialPdfUrl){URL.revokeObjectURL(activeMaterialPdfUrl);activeMaterialPdfUrl='';}
 };
 window.uploadLearningMaterial=async()=>{
- const title=document.getElementById('materialTitle')?.value.trim()||'';
- const subject=document.getElementById('materialSubject')?.value.trim()||'';
- const description=document.getElementById('materialDescription')?.value.trim()||'';
- const file=document.getElementById('materialPdfFile')?.files?.[0];
- const statusBox=document.getElementById('teacherMaterialsStatus');
- const btn=document.getElementById('uploadMaterialBtn');
- const teacher=window.currentTeacher;
- const say=(msg)=>{if(statusBox)statusBox.textContent=msg;};
+ const $id=id=>document.getElementById(id);
+ const title=$id('materialTitle')?.value.trim()||'';
+ const subject=$id('materialSubject')?.value.trim()||'';
+ const description=$id('materialDescription')?.value.trim()||'';
+ const file=$id('materialPdfFile')?.files?.[0];
+ const statusBox=$id('teacherMaterialsStatus'),btn=$id('uploadMaterialBtn');
+ const teacher=window.currentTeacher,db=window.firebaseDB;
+ const say=msg=>{if(statusBox)statusBox.textContent=msg;};
+ const withTimeout=(promise,ms,message)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error(message)),ms))]);
  if(!teacher){say('❌ Silakan login sebagai guru terlebih dahulu.');return alert('Silakan login sebagai guru terlebih dahulu.');}
- if(!title||!subject){say('Isi judul materi dan mata pelajaran terlebih dahulu.');return alert('Judul materi dan mata pelajaran wajib diisi.');}
- if(!file){say('Pilih file PDF terlebih dahulu.');return alert('Pilih file PDF terlebih dahulu.');}
+ if(!title||!subject){say('❌ Judul materi dan mata pelajaran wajib diisi.');return alert('Judul materi dan mata pelajaran wajib diisi.');}
+ if(!file){say('❌ Pilih file PDF terlebih dahulu.');return alert('Pilih file PDF terlebih dahulu.');}
  if(!(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf'))){say('❌ File harus berformat PDF.');return alert('File harus berformat PDF.');}
- if(file.size>20*1024*1024){say('❌ Ukuran PDF maksimal 20 MB.');return alert('Ukuran PDF maksimal 20 MB.');}
- const db=window.firebaseDB;
- if(!db||!window.firebase||typeof window.firebase.storage!=='function'){
-  say('❌ Firebase Storage belum termuat. Periksa koneksi internet/CDN dan aktifkan Storage pada proyek Firebase.');
-  return alert(statusBox?.textContent||'Firebase Storage belum tersedia.');
- }
- if(btn){btn.disabled=true;btn.textContent='⏳ Menyiapkan upload…';}
- say('Menyiapkan file PDF…');
- let storageRef=null, id='mat_'+Date.now()+'_'+Math.random().toString(36).slice(2,9), timeoutId=null;
+ if(!file.size){say('❌ File PDF kosong.');return alert('File PDF kosong.');}
+ // Simpan file langsung ke Realtime Database, tanpa Firebase Storage/bucket.
+ // Batas 5 MB menjaga ukuran payload Base64 tetap aman untuk satu kali tulis.
+ if(file.size>5*1024*1024){say('❌ Ukuran PDF maksimal 5 MB untuk penyimpanan langsung ke Realtime Database.');return alert('Ukuran PDF maksimal 5 MB untuk penyimpanan langsung ke Realtime Database.');}
+ if(!db||!window.firebase?.apps?.length){say('❌ Firebase Realtime Database belum siap.');return alert('Firebase Realtime Database belum siap. Periksa konfigurasi dan koneksi internet.');}
+ if(btn){btn.disabled=true;btn.textContent='⏳ Menyiapkan…';}
+ const id='mat_'+Date.now()+'_'+Math.random().toString(36).slice(2,9);
+ const dataPath='pgroRantingDua/materialFiles/'+id;
  try{
-  // Dapatkan Storage instance dari app yang sama dengan Realtime Database.
-  const storage=window.firebase.storage();
-  storageRef=storage.ref('learning-materials/'+String(teacher.id||'teacher')+'/'+id+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_'));
-  const task=storageRef.put(file,{contentType:'application/pdf',cacheControl:'public,max-age=3600'});
-  const snap=await new Promise((resolve,reject)=>{
-   let settled=false;
-   const finish=(fn,value)=>{if(settled)return;settled=true;if(timeoutId)clearTimeout(timeoutId);fn(value);};
-   timeoutId=setTimeout(()=>{try{task.cancel();}catch(_){}finish(reject,new Error('Upload tidak mendapat respons selama 90 detik. Periksa internet, Firebase Storage Bucket, dan Storage Rules.'));},90000);
-   task.on('state_changed',s=>{
-    const pct=s.totalBytes?Math.round(s.bytesTransferred/s.totalBytes*100):0;
-    say('Mengunggah PDF… '+pct+'% ('+Math.round(s.bytesTransferred/1024)+' / '+Math.round(s.totalBytes/1024)+' KB)');
-    if(btn)btn.textContent='⏳ '+pct+'%';
-   },err=>finish(reject,err),()=>finish(resolve,task.snapshot));
-  });
-  say('Upload selesai. Mengambil tautan PDF…');
-  const url=await snap.ref.getDownloadURL();
-  const record={title,subject,description,url,storagePath:snap.ref.fullPath,teacherId:String(teacher.id||''),teacherName:String(teacher.name||''),school:String(teacher.school||''),className:String(teacher.className||''),createdAt:new Date().toISOString(),fileName:file.name,size:file.size,mimeType:'application/pdf'};
-  say('Menyimpan informasi materi ke database…');
-  // Fail promptly rather than leaving the button spinning forever if Database Rules deny writes.
-  await Promise.race([
-   db.ref(MATERIALS_PATH+'/'+id).set(record),
-   new Promise((_,reject)=>setTimeout(()=>reject(new Error('File sudah terunggah, tetapi penyimpanan daftar materi ke Realtime Database terlalu lama. Periksa Database Rules.')),20000))
-  ]);
-  if(document.getElementById('materialTitle'))document.getElementById('materialTitle').value='';
-  if(document.getElementById('materialSubject'))document.getElementById('materialSubject').value='';
-  if(document.getElementById('materialDescription'))document.getElementById('materialDescription').value='';
-  if(document.getElementById('materialPdfFile'))document.getElementById('materialPdfFile').value='';
-  say('✅ Materi berhasil diunggah, disimpan, dan sedang disinkronkan ke daftar siswa.');
+  say('Membaca PDF…');
+  const base64=await withTimeout(new Promise((resolve,reject)=>{
+   const reader=new FileReader();
+   reader.onerror=()=>reject(new Error('Browser gagal membaca file PDF. Coba pilih ulang file.'));
+   reader.onabort=()=>reject(new Error('Pembacaan PDF dibatalkan.'));
+   reader.onload=()=>{const result=String(reader.result||'');const comma=result.indexOf(',');if(comma<0)return reject(new Error('Format PDF tidak dapat dikonversi.'));resolve(result.slice(comma+1));};
+   reader.readAsDataURL(file);
+  }),30000,'Membaca PDF terlalu lama. Coba file yang lebih kecil.');
+  say('Menyimpan file PDF langsung ke Firebase Realtime Database…');
+  if(btn)btn.textContent='⏳ Menyimpan PDF…';
+  await withTimeout(db.ref(dataPath).set({base64,fileName:file.name,size:file.size,mimeType:'application/pdf',uploadedAt:new Date().toISOString()}),60000,'Firebase tidak merespons penyimpanan file. Periksa koneksi dan Realtime Database Rules.');
+  const record={title,subject,description,dataPath,teacherId:String(teacher.id||''),teacherName:String(teacher.name||''),school:String(teacher.school||''),className:String(teacher.className||''),createdAt:new Date().toISOString(),fileName:file.name,size:file.size,mimeType:'application/pdf',storageType:'realtime-database'};
+  say('Mendaftarkan materi agar langsung muncul di akun siswa…');
+  await withTimeout(db.ref(MATERIALS_PATH+'/'+id).set(record),30000,'File PDF tersimpan, tetapi daftar materi tidak dapat diperbarui. Periksa Realtime Database Rules.');
+  learningMaterials[id]=record;renderPublicMaterials();renderTeacherMaterials();
+  $id('materialTitle').value='';$id('materialSubject').value='';$id('materialDescription').value='';$id('materialPdfFile').value='';
+  say('✅ Berhasil! PDF tersimpan langsung di Firebase Realtime Database dan daftar materi diperbarui secara realtime.');
  }catch(err){
-  console.error('Upload materi PDF gagal:',err);
-  const code=err?.code||'';
-  let hint='';
-  if(code==='storage/unauthorized'||code==='PERMISSION_DENIED')hint=' Izin ditolak. Periksa Firebase Storage Rules dan Realtime Database Rules.';
-  else if(code==='storage/bucket-not-found'||code==='storage/no-default-bucket')hint=' Bucket Storage tidak ditemukan. Pastikan storageBucket pada konfigurasi Firebase sesuai dengan bucket yang dibuat di Firebase Console.';
-  else if(code==='storage/canceled')hint=' Upload dibatalkan atau waktu tunggu habis.';
-  else if(code==='storage/retry-limit-exceeded'||code==='storage/unknown')hint=' Periksa koneksi internet, status Firebase Storage, dan aturan akses.';
-  else if((err?.message||'').includes('Realtime Database'))hint=' File PDF mungkin sudah tersimpan di Storage, tetapi belum masuk daftar materi siswa. Periksa izin tulis pada Realtime Database.';
-  else hint=' Pastikan Firebase Storage aktif dan Storage Rules serta Realtime Database Rules mengizinkan operasi yang diperlukan.';
-  say('❌ Upload belum berhasil'+(code?' ('+code+')':'')+': '+(err?.message||String(err))+hint);
- }finally{
-  if(timeoutId)clearTimeout(timeoutId);
-  if(btn){btn.disabled=false;btn.textContent='☁️ Upload Materi';}
- }
+  console.error('Simpan materi PDF ke Realtime Database gagal:',err);
+  const code=err?.code||'';let hint='';
+  if(code==='PERMISSION_DENIED'||/permission_denied|permission denied|denied/i.test(err?.message||''))hint=' Firebase menolak akses. Periksa Realtime Database → Rules untuk izin baca/tulis pada pgroRantingDua/materials dan pgroRantingDua/materialFiles.';
+  else if(/network|offline|unavailable/i.test(err?.message||''))hint=' Periksa koneksi internet dan status Firebase Realtime Database.';
+  say('❌ Gagal menyimpan PDF'+(code?' ['+code+']':'')+': '+(err?.message||String(err))+hint);
+  alert('Gagal menyimpan PDF ke Firebase Realtime Database.\n\n'+(err?.message||String(err))+(code?'\nKode: '+code:'')+'\n\nPastikan Realtime Database Rules mengizinkan baca/tulis untuk pgroRantingDua/materials dan pgroRantingDua/materialFiles.');
+ }finally{if(btn){btn.disabled=false;btn.textContent='☁️ Upload Materi';}}
 };
 window.deleteLearningMaterial=async idEncoded=>{
  const id=decodeURIComponent(idEncoded||'');const m=learningMaterials[id];
@@ -2680,15 +2758,32 @@ window.deleteLearningMaterial=async idEncoded=>{
  try{
   const db=window.firebaseDB;if(!db)throw new Error('Firebase belum terhubung.');
   await db.ref(MATERIALS_PATH+'/'+id).remove();
+  if(m.dataPath)await db.ref(m.dataPath).remove();
   if(m.storagePath&&typeof firebase.storage==='function'){try{await firebase.storage().ref(m.storagePath).delete()}catch(storageErr){console.warn('Metadata terhapus, file Storage perlu dibersihkan:',storageErr)}}
  }catch(err){alert('Gagal menghapus materi: '+(err.message||err));}
 };
+let learningMaterialsListenerStarted=false;
 function startLearningMaterials(){
  const db=window.firebaseDB;
- if(!db){const b=document.getElementById('publicMaterialsList');if(b)b.innerHTML='<div class="empty">Firebase belum terhubung. Periksa koneksi internet.</div>';return;}
+ if(!db){
+  const b=document.getElementById('publicMaterialsList');
+  if(b)b.innerHTML='<div class="empty">Menghubungkan ke Firebase untuk memuat materi…</div>';
+  if(!window.__materialFirebaseRetry){
+   window.__materialFirebaseRetry=true;
+   let attempts=0;
+   const retry=setInterval(()=>{
+    attempts++;
+    if(window.firebaseDB){clearInterval(retry);window.__materialFirebaseRetry=false;startLearningMaterials();}
+    else if(attempts>=30){clearInterval(retry);window.__materialFirebaseRetry=false;const box=document.getElementById('publicMaterialsList');if(box)box.innerHTML='<div class="empty">Firebase belum terhubung. Periksa koneksi internet lalu muat ulang halaman.</div>';}
+   },1000);
+  }
+  return;
+ }
+ if(learningMaterialsListenerStarted)return;
+ learningMaterialsListenerStarted=true;
  db.ref(MATERIALS_PATH).on('value',snap=>{
   learningMaterials=snap.val()||{};
-  renderPublicMaterials();renderTeacherMaterials();
+  populateMaterialFilters();renderPublicMaterials();renderTeacherMaterials();
  },err=>{
   console.error('Gagal membaca materi PDF:',err);
   const b=document.getElementById('publicMaterialsList');if(b)b.innerHTML='<div class="empty">Daftar materi tidak dapat dimuat. Periksa izin baca Firebase.</div>';
