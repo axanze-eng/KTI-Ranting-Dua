@@ -700,7 +700,7 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
 <section id="teacherScreen" class="screen hidden">
  <div class="topbar"><span>👨‍🏫</span><h2 id="teacherTitle">Panel Guru</h2><button class="ghost" onclick="showHome()">Keluar</button></div>
  <div class="content">
-  <div class="notice">💡 Tambahkan soal sesuai mata pelajaran. <b>Kode Soal</b> adalah kode rahasia yang diberikan guru kepada siswa. Kode tidak ditampilkan di daftar siswa.</div>
+  <div class="notice">💡 Buat banyak soal dengan memakai <b>Kode Soal yang sama</b>. Setiap baris disimpan sebagai soal terpisah dan muncul pada akun siswa. Bentuk <b>pg</b> untuk balon udara, sedangkan <b>isian</b>/<b>essay</b> untuk game perahu.</div>
   <div class="card">
    <h3>📝 Tambah / Ubah Soal</h3>
    <input type="hidden" id="qId">
@@ -724,8 +724,8 @@ body:has(#woodRiver) #handPointer .handPointerRing{display:none!important}
    <select id="qCorrect"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>
    <div class="actions"><button class="primary" onclick="saveQuestion()">💾 Simpan Soal</button><button class="ghost" onclick="clearQuestion()">Bersihkan</button></div>
 <div class="actions">
-    <button class="good" onclick="downloadQuestionTemplate()">⬇️ Download Template Soal</button>
-    <label class="uploadLabel" for="questionUpload">⬆️ Upload Template Soal</label>
+    <button class="good" onclick="downloadQuestionTemplate()">⬇️ Download Template Bank Soal</button>
+    <label class="uploadLabel" for="questionUpload">⬆️ Upload Bank Soal</label>
     <input class="fileInput" id="questionUpload" type="file" accept=".xlsx,.csv,.txt" onchange="uploadQuestions(this)">
     <button class="danger" onclick="deleteAllMyQuestions()">🗑️ Hapus Semua Soal Saya</button>
    </div>
@@ -1075,10 +1075,12 @@ function downloadExcel(filename,sheetName,rows){
 }
 window.downloadQuestionTemplate=()=>{
  const rows=[
-  ['Mata Pelajaran','Kode Soal','Waktu Pengerjaan (Menit)','Pertanyaan','Jawaban A','Jawaban B','Jawaban C','Jawaban D','Jawaban Benar'],
-  ['Matematika','MTK5A-2026','10','2 + 2 = ...','3','4','5','6','B']
+  ['Mata Pelajaran','Kode Soal','Waktu Pengerjaan (Menit)','Bentuk Soal','Pertanyaan','Jawaban A','Jawaban B','Jawaban C','Jawaban D','Jawaban Benar','Kunci Jawaban Isian'],
+  ['Matematika','MTK5A-2026','10','pg','2 + 2 = ...','3','4','5','6','B',''],
+  ['Matematika','MTK5A-2026','10','isian','Hasil dari 5 + 3 adalah ...','','','','','','8'],
+  ['Bahasa Indonesia','BI5A-2026','10','pg','Lawan kata besar adalah ...','kecil','tinggi','panjang','luas','A','']
  ];
- downloadExcel('Template_Soal_Balon_Jawaban.xlsx','Template Soal',rows);
+ downloadExcel('Template_Bank_Soal_Balon_dan_Perahu.xlsx','Bank Soal',rows);
 };
 window.downloadTeacherTemplate=()=>{
  const rows=[
@@ -1113,23 +1115,32 @@ window.uploadQuestions=input=>{
  const file=input.files?.[0];if(!file)return;
  readSpreadsheet(file,rows=>{
   if(!rows)return;
-  try{if(rows.length<2)throw new Error('Template kosong.');
-   const h=rows[0].map(x=>x.toLowerCase().trim()),ix=n=>h.indexOf(n);
-   const req=['mapel','kode soal','pertanyaan','jawaban a','jawaban b','jawaban c','jawaban d','jawaban benar'];
-   if(req.some(n=>ix(n)<0))throw new Error('Header template soal tidak sesuai. Gunakan Download Template Soal.');
-   const durationIndex=ix('waktu pengerjaan (menit)')>=0?ix('waktu pengerjaan (menit)'):ix('waktu menit');
+  try{
+   if(rows.length<2)throw new Error('Template kosong.');
+   const h=rows[0].map(x=>String(x).toLowerCase().trim()),ix=n=>h.indexOf(n);
+   if(['mapel','kode soal','pertanyaan'].some(n=>ix(n)<0))throw new Error('Header wajib: Mata Pelajaran, Kode Soal, Pertanyaan. Unduh template terbaru.');
+   const di=ix('waktu pengerjaan (menit)')>=0?ix('waktu pengerjaan (menit)'):ix('waktu menit'),ti=ix('bentuk soal'),ei=ix('kunci jawaban isian');
    const imported=[];
    rows.slice(1).forEach((r,n)=>{
     if(!r.join('').trim())return;
-    const cr=(r[ix('jawaban benar')]||'').trim().toUpperCase(),correct=['A','B','C','D'].indexOf(cr);
-    const duration=Math.max(1,Math.min(180,Number(durationIndex>=0?(r[durationIndex]||10):10)||10));
-    const obj={id:uid(),teacherId:currentTeacher.id,school:currentTeacher.school,className:currentTeacher.className,subject:(r[ix('mapel')]||'').trim(),code:(r[ix('kode soal')]||'').trim().toUpperCase(),duration,q:(r[ix('pertanyaan')]||'').trim(),a:[r[ix('jawaban a')],r[ix('jawaban b')],r[ix('jawaban c')],r[ix('jawaban d')]].map(v=>(v||'').trim()),correct};
-    if(!obj.subject||!obj.code||!obj.q||obj.a.some(x=>!x)||correct<0)throw new Error(`Baris ${n+2} tidak lengkap atau Jawaban Benar harus A/B/C/D.`);
+    const code=String(r[ix('kode soal')]||'').trim().toUpperCase(),raw=String(ti>=0?(r[ti]||'pg'):'pg').trim().toLowerCase();
+    const type=({'pg':'pg','pilihan ganda':'pg','balon udara':'pg','isian':'isian','perahu':'isian','game perahu':'isian','essay':'essay','uraian':'essay'}[raw]||raw);
+    const duration=Math.max(1,Math.min(180,Number(di>=0?(r[di]||10):10)||10));
+    const subject=String(r[ix('mapel')]||'').trim(),q=String(r[ix('pertanyaan')]||'').trim();
+    const a=['a','b','c','d'].map(k=>ix('jawaban '+k)>=0?String(r[ix('jawaban '+k)]||'').trim():'');
+    const cr=String(ix('jawaban benar')>=0?(r[ix('jawaban benar')]||''):'').trim().toUpperCase(),correct=['A','B','C','D'].indexOf(cr);
+    const expected=ei>=0?String(r[ei]||'').trim():'';
+    const obj={id:uid(),teacherId:currentTeacher.id,school:currentTeacher.school,className:currentTeacher.className,subject,code,duration,q,type,expected,a,correct:Math.max(0,correct)};
+    if(!subject||!code||!q)throw new Error(`Baris ${n+2}: mapel, kode, dan pertanyaan wajib diisi.`);
+    if(!['pg','isian','essay'].includes(type))throw new Error(`Baris ${n+2}: Bentuk Soal harus pg, isian, atau essay.`);
+    if(type==='pg'&&(a.some(x=>!x)||correct<0))throw new Error(`Baris ${n+2}: soal pg harus memiliki pilihan A-D dan Jawaban Benar A/B/C/D.`);
+    if(type!=='pg'&&!expected)throw new Error(`Baris ${n+2}: isi Kunci Jawaban Isian untuk soal ${type}.`);
     imported.push(obj);
    });
    if(!imported.length)throw new Error('Tidak ada soal yang bisa diimpor.');
-   questions=questions.concat(imported);set(K.questions,questions);renderQuestions();alert(`${imported.length} soal berhasil di-upload.`);
-  }catch(e){alert('Upload gagal: '+e.message)} input.value='';
+   questions=questions.concat(imported);set(K.questions,questions);renderQuestions();
+   alert(`${imported.length} soal berhasil diunggah. Kode yang sama dapat memuat banyak soal: pg untuk balon udara, isian/essay untuk perahu.`);
+  }catch(e){alert('Upload gagal: '+e.message)}finally{input.value=''}
  });
 };
 window.deleteAllMyQuestions=()=>{
