@@ -2607,39 +2607,71 @@ window.closePdfReader=()=>{
  document.getElementById('pdfReaderFrame').src='about:blank';
 };
 window.uploadLearningMaterial=async()=>{
- const title=document.getElementById('materialTitle').value.trim();
- const subject=document.getElementById('materialSubject').value.trim();
- const description=document.getElementById('materialDescription').value.trim();
- const file=document.getElementById('materialPdfFile').files?.[0];
+ const title=document.getElementById('materialTitle')?.value.trim()||'';
+ const subject=document.getElementById('materialSubject')?.value.trim()||'';
+ const description=document.getElementById('materialDescription')?.value.trim()||'';
+ const file=document.getElementById('materialPdfFile')?.files?.[0];
  const statusBox=document.getElementById('teacherMaterialsStatus');
  const btn=document.getElementById('uploadMaterialBtn');
  const teacher=window.currentTeacher;
- if(!teacher)return alert('Silakan login sebagai guru terlebih dahulu.');
- if(!title||!subject)return alert('Judul materi dan mata pelajaran wajib diisi.');
- if(!file)return alert('Pilih file PDF terlebih dahulu.');
- if(!(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')))return alert('File harus berformat PDF.');
- if(file.size>20*1024*1024)return alert('Ukuran PDF maksimal 20 MB.');
+ const say=(msg)=>{if(statusBox)statusBox.textContent=msg;};
+ if(!teacher){say('❌ Silakan login sebagai guru terlebih dahulu.');return alert('Silakan login sebagai guru terlebih dahulu.');}
+ if(!title||!subject){say('Isi judul materi dan mata pelajaran terlebih dahulu.');return alert('Judul materi dan mata pelajaran wajib diisi.');}
+ if(!file){say('Pilih file PDF terlebih dahulu.');return alert('Pilih file PDF terlebih dahulu.');}
+ if(!(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf'))){say('❌ File harus berformat PDF.');return alert('File harus berformat PDF.');}
+ if(file.size>20*1024*1024){say('❌ Ukuran PDF maksimal 20 MB.');return alert('Ukuran PDF maksimal 20 MB.');}
  const db=window.firebaseDB;
- if(!db||!window.firebase||typeof firebase.storage!=='function'){statusBox.textContent='❌ Firebase Storage belum tersedia. Aktifkan Storage di Firebase Console dan muat ulang halaman.';return alert(statusBox.textContent);}
- btn.disabled=true;btn.textContent='⏳ Mengunggah...';statusBox.textContent='Menghubungi Firebase Storage…';
- let storageRef=null;
+ if(!db||!window.firebase||typeof window.firebase.storage!=='function'){
+  say('❌ Firebase Storage belum termuat. Periksa koneksi internet/CDN dan aktifkan Storage pada proyek Firebase.');
+  return alert(statusBox?.textContent||'Firebase Storage belum tersedia.');
+ }
+ if(btn){btn.disabled=true;btn.textContent='⏳ Menyiapkan upload…';}
+ say('Menyiapkan file PDF…');
+ let storageRef=null, id='mat_'+Date.now()+'_'+Math.random().toString(36).slice(2,9), timeoutId=null;
  try{
-  const id='mat_'+Date.now()+'_'+Math.random().toString(36).slice(2,9);
-  storageRef=firebase.storage().ref('learning-materials/'+String(teacher.id||'teacher')+'/'+id+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_'));
+  // Dapatkan Storage instance dari app yang sama dengan Realtime Database.
+  const storage=window.firebase.storage();
+  storageRef=storage.ref('learning-materials/'+String(teacher.id||'teacher')+'/'+id+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_'));
   const task=storageRef.put(file,{contentType:'application/pdf',cacheControl:'public,max-age=3600'});
-  task.on('state_changed',snap=>{const pct=snap.totalBytes?Math.round(snap.bytesTransferred/snap.totalBytes*100):0;statusBox.textContent='Mengunggah PDF… '+pct+'%';},err=>{console.warn('Upload PDF:',err);});
-  const snap=await task;
+  const snap=await new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(fn,value)=>{if(settled)return;settled=true;if(timeoutId)clearTimeout(timeoutId);fn(value);};
+   timeoutId=setTimeout(()=>{try{task.cancel();}catch(_){}finish(reject,new Error('Upload tidak mendapat respons selama 90 detik. Periksa internet, Firebase Storage Bucket, dan Storage Rules.'));},90000);
+   task.on('state_changed',s=>{
+    const pct=s.totalBytes?Math.round(s.bytesTransferred/s.totalBytes*100):0;
+    say('Mengunggah PDF… '+pct+'% ('+Math.round(s.bytesTransferred/1024)+' / '+Math.round(s.totalBytes/1024)+' KB)');
+    if(btn)btn.textContent='⏳ '+pct+'%';
+   },err=>finish(reject,err),()=>finish(resolve,task.snapshot));
+  });
+  say('Upload selesai. Mengambil tautan PDF…');
   const url=await snap.ref.getDownloadURL();
-  const record={title,subject,description,url,storagePath:snap.ref.fullPath,teacherId:String(teacher.id||''),teacherName:String(teacher.name||''),school:String(teacher.school||''),className:String(teacher.className||''),createdAt:new Date().toISOString(),fileName:file.name,size:file.size};
-  await db.ref(MATERIALS_PATH+'/'+id).set(record);
-  document.getElementById('materialTitle').value='';document.getElementById('materialSubject').value='';
-  document.getElementById('materialDescription').value='';document.getElementById('materialPdfFile').value='';
-  statusBox.textContent='✅ Materi berhasil diunggah dan tersedia di halaman awal untuk siswa.';
+  const record={title,subject,description,url,storagePath:snap.ref.fullPath,teacherId:String(teacher.id||''),teacherName:String(teacher.name||''),school:String(teacher.school||''),className:String(teacher.className||''),createdAt:new Date().toISOString(),fileName:file.name,size:file.size,mimeType:'application/pdf'};
+  say('Menyimpan informasi materi ke database…');
+  // Fail promptly rather than leaving the button spinning forever if Database Rules deny writes.
+  await Promise.race([
+   db.ref(MATERIALS_PATH+'/'+id).set(record),
+   new Promise((_,reject)=>setTimeout(()=>reject(new Error('File sudah terunggah, tetapi penyimpanan daftar materi ke Realtime Database terlalu lama. Periksa Database Rules.')),20000))
+  ]);
+  if(document.getElementById('materialTitle'))document.getElementById('materialTitle').value='';
+  if(document.getElementById('materialSubject'))document.getElementById('materialSubject').value='';
+  if(document.getElementById('materialDescription'))document.getElementById('materialDescription').value='';
+  if(document.getElementById('materialPdfFile'))document.getElementById('materialPdfFile').value='';
+  say('✅ Materi berhasil diunggah, disimpan, dan sedang disinkronkan ke daftar siswa.');
  }catch(err){
   console.error('Upload materi PDF gagal:',err);
-  const code=err.code||'';const hint=code==='storage/unauthorized'?' Aturan Firebase Storage menolak upload. Periksa Storage Rules.':code==='storage/bucket-not-found'?' Bucket Storage tidak ditemukan. Periksa nama bucket di konfigurasi Firebase.':code==='storage/retry-limit-exceeded'?' Koneksi gagal berulang; periksa internet lalu coba lagi.':' Pastikan Firebase Storage sudah dibuat/diaktifkan dan Rules mengizinkan upload serta baca.';
-  statusBox.textContent='❌ Upload gagal'+(code?' ('+code+')':'')+': '+(err.message||err)+hint;
- }finally{btn.disabled=false;btn.textContent='☁️ Upload Materi';}
+  const code=err?.code||'';
+  let hint='';
+  if(code==='storage/unauthorized'||code==='PERMISSION_DENIED')hint=' Izin ditolak. Periksa Firebase Storage Rules dan Realtime Database Rules.';
+  else if(code==='storage/bucket-not-found'||code==='storage/no-default-bucket')hint=' Bucket Storage tidak ditemukan. Pastikan storageBucket pada konfigurasi Firebase sesuai dengan bucket yang dibuat di Firebase Console.';
+  else if(code==='storage/canceled')hint=' Upload dibatalkan atau waktu tunggu habis.';
+  else if(code==='storage/retry-limit-exceeded'||code==='storage/unknown')hint=' Periksa koneksi internet, status Firebase Storage, dan aturan akses.';
+  else if((err?.message||'').includes('Realtime Database'))hint=' File PDF mungkin sudah tersimpan di Storage, tetapi belum masuk daftar materi siswa. Periksa izin tulis pada Realtime Database.';
+  else hint=' Pastikan Firebase Storage aktif dan Storage Rules serta Realtime Database Rules mengizinkan operasi yang diperlukan.';
+  say('❌ Upload belum berhasil'+(code?' ('+code+')':'')+': '+(err?.message||String(err))+hint);
+ }finally{
+  if(timeoutId)clearTimeout(timeoutId);
+  if(btn){btn.disabled=false;btn.textContent='☁️ Upload Materi';}
+ }
 };
 window.deleteLearningMaterial=async idEncoded=>{
  const id=decodeURIComponent(idEncoded||'');const m=learningMaterials[id];
