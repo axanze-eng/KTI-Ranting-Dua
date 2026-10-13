@@ -1080,7 +1080,7 @@ window.downloadQuestionTemplate=()=>{
   ['Matematika','MTK5A-2026','10','isian','Hasil dari 5 + 3 adalah ...','','','','','','8'],
   ['Bahasa Indonesia','BI5A-2026','10','pg','Lawan kata besar adalah ...','kecil','tinggi','panjang','luas','A','']
  ];
- downloadExcel('Template_Bank_Soal_Balon_dan_Perahu.xlsx','Bank Soal',rows);
+ downloadExcel('Template Soal Jawaban Randu.xlsx','Template Soal',rows);
 };
 window.downloadTeacherTemplate=()=>{
  const rows=[
@@ -1098,49 +1098,123 @@ function parseCSVLine(line){
 function parseCSV(txt){return txt.replace(/^\uFEFF/,'').split(/\r?\n/).filter(x=>x.trim()).map(parseCSVLine)}
 
 function readSpreadsheet(file,done){
+ const isExcel=/\.xlsx?$/i.test(file.name);
+ const maxBytes=10*1024*1024;
+ if(file.size>maxBytes){
+  alert('File terlalu besar ('+(file.size/1024/1024).toFixed(1)+' MB). Maksimal 10 MB agar browser tidak berhenti merespons.');
+  done(null);return;
+ }
+ if(isExcel){
+  // XLSX.read berjalan di Web Worker agar tidak membekukan halaman saat file dipilih.
+  const workerSource=`
+   self.onmessage=async function(ev){
+    try{
+     importScripts('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js');
+     const buffer=ev.data;
+     const wb=XLSX.read(buffer,{type:'array',dense:true});
+     if(!wb.SheetNames||!wb.SheetNames.length)throw new Error('Workbook tidak memiliki lembar kerja.');
+     const ws=wb.Sheets[wb.SheetNames[0]];
+     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',blankrows:false});
+     if(rows.length>501)throw new Error('Jumlah baris melebihi batas 500 data. Pisahkan file menjadi beberapa bagian.');
+     if(rows.some(r=>r.length>30))throw new Error('Terlalu banyak kolom pada file Excel. Periksa template yang digunakan.');
+     self.postMessage({ok:true,rows:rows});
+    }catch(e){self.postMessage({ok:false,error:e&&e.message?e.message:'Excel tidak dapat dibaca.'});}
+   };`;
+  let worker,workerUrl;
+  try{
+   workerUrl=URL.createObjectURL(new Blob([workerSource],{type:'text/javascript'}));
+   worker=new Worker(workerUrl);
+  }catch(e){
+   if(workerUrl)URL.revokeObjectURL(workerUrl);
+   alert('Browser tidak mendukung proses Excel aman. Simpan file sebagai CSV UTF-8 lalu unggah kembali.');
+   done(null);return;
+  }
+  const cleanup=()=>{worker.terminate();URL.revokeObjectURL(workerUrl)};
+  worker.onmessage=ev=>{
+   cleanup();
+   if(ev.data&&ev.data.ok)done(ev.data.rows);
+   else{alert('Excel tidak dapat dibaca: '+(ev.data?.error||'Format tidak valid.'));done(null);}
+  };
+  worker.onerror=()=>{
+   cleanup();
+   alert('Pembaca Excel gagal dimuat. Periksa koneksi internet atau simpan file sebagai CSV UTF-8 lalu unggah kembali.');
+   done(null);
+  };
+  const reader=new FileReader();
+  reader.onload=()=>worker.postMessage(reader.result,[reader.result]);
+  reader.onerror=()=>{cleanup();alert('Gagal membaca file dari perangkat.');done(null)};
+  reader.readAsArrayBuffer(file);
+  return;
+ }
  const reader=new FileReader();
  reader.onload=()=>{
   try{
-   if(/\.xlsx?$/i.test(file.name)){
-    if(typeof XLSX==='undefined')throw new Error('Pustaka Excel belum tersedia.');
-    const wb=XLSX.read(reader.result,{type:'array'});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    done(XLSX.utils.sheet_to_json(ws,{header:1,defval:''}));
-   }else done(parseCSV(reader.result));
+   const rows=parseCSV(reader.result);
+   if(rows.length>501)throw new Error('Jumlah baris melebihi batas 500 data. Pisahkan file menjadi beberapa bagian.');
+   if(rows.some(r=>r.length>30))throw new Error('Terlalu banyak kolom. Periksa file CSV.');
+   done(rows);
   }catch(e){alert('File tidak dapat dibaca: '+e.message);done(null)}
  };
- if(/\.xlsx?$/i.test(file.name))reader.readAsArrayBuffer(file);else reader.readAsText(file);
+ reader.onerror=()=>{alert('Gagal membaca file dari perangkat.');done(null)};
+ reader.readAsText(file);
 }
+
 window.uploadQuestions=input=>{
  const file=input.files?.[0];if(!file)return;
+ input.disabled=true;
  readSpreadsheet(file,rows=>{
-  if(!rows)return;
+  if(!rows){input.disabled=false;input.value='';return;}
   try{
-   if(rows.length<2)throw new Error('Template kosong.');
-   const h=rows[0].map(x=>String(x).toLowerCase().trim()),ix=n=>h.indexOf(n);
-   if(['mapel','kode soal','pertanyaan'].some(n=>ix(n)<0))throw new Error('Header wajib: Mata Pelajaran, Kode Soal, Pertanyaan. Unduh template terbaru.');
-   const di=ix('waktu pengerjaan (menit)')>=0?ix('waktu pengerjaan (menit)'):ix('waktu menit'),ti=ix('bentuk soal'),ei=ix('kunci jawaban isian');
+   if(rows.length<2)throw new Error('Template kosong atau hanya berisi judul kolom.');
+   // Terima judul kolom dari template resmi maupun variasi penulisan umum.
+   const norm=v=>String(v??'').replace(/^\uFEFF/,'').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[_-]+/g,' ').replace(/\s+/g,' ');
+   const headers=rows[0].map(norm);
+   const aliases={
+    subject:['mata pelajaran','mapel','mata pelajaran / mapel','pelajaran'],
+    code:['kode soal','kode'],
+    duration:['waktu pengerjaan (menit)','waktu pengerjaan','waktu menit','durasi','durasi (menit)'],
+    type:['bentuk soal','jenis soal','tipe soal','tipe'],
+    question:['pertanyaan','soal','teks soal'],
+    a:['jawaban a','pilihan a','opsi a','a'],
+    b:['jawaban b','pilihan b','opsi b','b'],
+    c:['jawaban c','pilihan c','opsi c','c'],
+    d:['jawaban d','pilihan d','opsi d','d'],
+    correct:['jawaban benar','kunci pg','kunci jawaban pg','jawaban yang benar'],
+    expected:['kunci jawaban isian','kunci jawaban','jawaban isian','jawaban essay','jawaban uraian','jawaban']
+   };
+   const col=key=>headers.findIndex(h=>aliases[key].includes(h));
+   const si=col('subject'),ci=col('code'),qi=col('question');
+   if(si<0||ci<0||qi<0)throw new Error('Kolom wajib belum sesuai. Gunakan template “Template Soal Jawaban Randu.xlsx” dengan kolom Mata Pelajaran, Kode Soal, dan Pertanyaan.');
+   const val=(r,key)=>{const i=col(key);return i<0?'':String(r[i]??'').trim()};
    const imported=[];
    rows.slice(1).forEach((r,n)=>{
-    if(!r.join('').trim())return;
-    const code=String(r[ix('kode soal')]||'').trim().toUpperCase(),raw=String(ti>=0?(r[ti]||'pg'):'pg').trim().toLowerCase();
-    const type=({'pg':'pg','pilihan ganda':'pg','balon udara':'pg','isian':'isian','perahu':'isian','game perahu':'isian','essay':'essay','uraian':'essay'}[raw]||raw);
-    const duration=Math.max(1,Math.min(180,Number(di>=0?(r[di]||10):10)||10));
-    const subject=String(r[ix('mapel')]||'').trim(),q=String(r[ix('pertanyaan')]||'').trim();
-    const a=['a','b','c','d'].map(k=>ix('jawaban '+k)>=0?String(r[ix('jawaban '+k)]||'').trim():'');
-    const cr=String(ix('jawaban benar')>=0?(r[ix('jawaban benar')]||''):'').trim().toUpperCase(),correct=['A','B','C','D'].indexOf(cr);
-    const expected=ei>=0?String(r[ei]||'').trim():'';
-    const obj={id:uid(),teacherId:currentTeacher.id,school:currentTeacher.school,className:currentTeacher.className,subject,code,duration,q,type,expected,a,correct:Math.max(0,correct)};
-    if(!subject||!code||!q)throw new Error(`Baris ${n+2}: mapel, kode, dan pertanyaan wajib diisi.`);
+    if(!r.some(v=>String(v??'').trim()))return;
+    const code=val(r,'code').toUpperCase(),raw=val(r,'type').toLowerCase();
+    const typeMap={'pg':'pg','pilihan ganda':'pg','balon udara':'pg','multiple choice':'pg','isian':'isian','perahu':'isian','game perahu':'isian','jawaban singkat':'isian','essay':'essay','uraian':'essay'};
+    const type=typeMap[raw||'pg']||raw;
+    const duration=Math.max(1,Math.min(180,Number(val(r,'duration'))||10));
+    const subject=val(r,'subject'),q=val(r,'question');
+    const a=['a','b','c','d'].map(k=>val(r,k));
+    let cr=val(r,'correct').toUpperCase();
+    const letterMatch=cr.match(/^(?:JAWABAN\s*)?([ABCD])(?:\b|[.):\s])/);
+    if(letterMatch)cr=letterMatch[1];
+    let correct=['A','B','C','D'].indexOf(cr);
+    if(correct<0&&cr){const match=a.findIndex(x=>norm(x)===norm(cr));if(match>=0)correct=match;}
+    const expected=val(r,'expected');
+    if(!subject||!code||!q)throw new Error(`Baris ${n+2}: Mata Pelajaran, Kode Soal, dan Pertanyaan wajib diisi.`);
     if(!['pg','isian','essay'].includes(type))throw new Error(`Baris ${n+2}: Bentuk Soal harus pg, isian, atau essay.`);
-    if(type==='pg'&&(a.some(x=>!x)||correct<0))throw new Error(`Baris ${n+2}: soal pg harus memiliki pilihan A-D dan Jawaban Benar A/B/C/D.`);
+    if(type==='pg'&&(a.some(x=>!x)||correct<0))throw new Error(`Baris ${n+2}: soal pilihan ganda harus memiliki Jawaban A-D dan Jawaban Benar berupa A/B/C/D atau teks pilihan yang benar.`);
     if(type!=='pg'&&!expected)throw new Error(`Baris ${n+2}: isi Kunci Jawaban Isian untuk soal ${type}.`);
+    const obj={id:uid(),teacherId:currentTeacher.id,school:currentTeacher.school,className:currentTeacher.className,subject,code,duration,q,type,expected,a,correct:Math.max(0,correct)};
     imported.push(obj);
    });
-   if(!imported.length)throw new Error('Tidak ada soal yang bisa diimpor.');
+   if(!imported.length)throw new Error('Tidak ada baris soal yang bisa diimpor.');
    questions=questions.concat(imported);set(K.questions,questions);renderQuestions();
-   alert(`${imported.length} soal berhasil diunggah. Kode yang sama dapat memuat banyak soal: pg untuk balon udara, isian/essay untuk perahu.`);
-  }catch(e){alert('Upload gagal: '+e.message)}finally{input.value=''}
+   alert(`${imported.length} soal berhasil diunggah dan ditambahkan ke Bank Soal Saya.`);
+  }catch(e){alert('Upload gagal: '+e.message)}
+  finally{input.disabled=false;input.value=''}
  });
 };
 window.deleteAllMyQuestions=()=>{
@@ -1150,8 +1224,9 @@ window.deleteAllMyQuestions=()=>{
 };
 window.uploadTeachers=input=>{
  const file=input.files?.[0];if(!file)return;
+ input.disabled=true;
  readSpreadsheet(file,rows=>{
-  if(!rows)return;
+  if(!rows){input.disabled=false;input.value='';return;}
   try{if(rows.length<2)throw new Error('Template kosong.');
    const h=rows[0].map(x=>String(x).toLowerCase().trim()),ix=n=>h.indexOf(n);
    const req=['nama guru','username','password','kelas','nama sekolah'];
@@ -1165,7 +1240,7 @@ window.uploadTeachers=input=>{
     if(old){obj.id=old.id;teachers=teachers.map(t=>t.id===old.id?obj:t);updated++}else{teachers.push(obj);added++}
    });
    set(K.teachers,teachers);loadAdmin();alert(`Upload selesai. ${added} guru baru, ${updated} guru diperbarui.`);
-  }catch(e){alert('Upload gagal: '+e.message)} input.value='';
+  }catch(e){alert('Upload gagal: '+e.message)} finally{input.disabled=false;input.value='';}
  });
 };
 
