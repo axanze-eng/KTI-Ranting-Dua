@@ -2367,6 +2367,33 @@ window.addEventListener('pagehide',close);
 })();
 </script>
 
+
+<!-- Perbaikan: sembunyikan pilihan jawaban Game Perahu sampai hitung mundur selesai -->
+<style id="boat-answer-countdown-visibility-fix">
+  #boatRaceAnswers { visibility: hidden !important; pointer-events: none !important; }
+  #boatRaceAnswers.boat-answer-unlocked { visibility: visible !important; pointer-events: auto !important; }
+</style>
+<script id="boat-answer-countdown-visibility-fix-script">
+(function(){
+  function syncBoatAnswerVisibility(){
+    const answers = document.getElementById('boatRaceAnswers');
+    if (!answers) return;
+    let started = false, finished = false;
+    try { started = typeof raceStarted !== 'undefined' && raceStarted === true; } catch(e) {}
+    try { finished = typeof raceFinished !== 'undefined' && raceFinished === true; } catch(e) {}
+    const unlocked = started && !finished;
+    answers.classList.toggle('boat-answer-unlocked', unlocked);
+    answers.setAttribute('aria-hidden', unlocked ? 'false' : 'true');
+    answers.querySelectorAll('button').forEach(button => {
+      if (!unlocked) button.setAttribute('tabindex','-1');
+      else button.removeAttribute('tabindex');
+    });
+  }
+  syncBoatAnswerVisibility();
+  window.setInterval(syncBoatAnswerVisibility, 100);
+  document.addEventListener('DOMContentLoaded', syncBoatAnswerVisibility);
+})();
+</script>
 </body>
 </html>
 
@@ -2497,7 +2524,7 @@ async function raceConnect(){
   const entry=players.child(token);racePresenceRef=entry;raceSession=room;
   await entry.onDisconnect().remove();racePresence={name:person,team:team||'',at:Date.now(),role:'student',ready:false};await entry.set(racePresence);
   racePresenceTimer=setInterval(()=>{if(racePresenceRef)racePresenceRef.update({at:firebase.database.ServerValue.TIMESTAMP}).catch(()=>raceNotice('Koneksi Firebase terputus.'))},10000);
-  raceMatchRef=d.ref(roomPath()+'/boatMatch');raceMatchListener=snap=>{const m=snap.val();if(!m||m.status==='finished'){window.__boatTimerUnlocked=false;window.__boatDeadline=0;raceFinished=!!m;raceQuestionVisible=false;raceStarted=false;raceReady=false;stopRaceCountdown();raceShowLobby();raceUpdateScores({});if(m)raceNotice('Permainan selesai. Skor kedua tim sudah direset.');return;}raceMatchId=m.matchId||'';raceFinished=false;if(m.status==='countdown'){raceQuestionVisible=true;raceRunCountdown(m.startAt)}else if(m.status==='playing'||Date.now()>=m.startAt){raceQuestionVisible=true;if(!raceAllPlayersReady)return;stopRaceCountdown();raceStarted=true;raceReady=true;window.__boatTimerUnlocked=true;window.__boatDeadline=Number(m.startAt)+(window.__boatTotalSeconds||600)*1000;raceShowLobby();}};raceMatchRef.on('value',raceMatchListener);
+  raceMatchRef=d.ref(roomPath()+'/boatMatch');raceMatchListener=snap=>{const m=snap.val();if(!m||m.status==='finished'){window.__boatTimerUnlocked=false;window.__boatDeadline=0;raceFinished=!!m;raceQuestionVisible=false;raceStarted=false;raceReady=false;stopRaceCountdown();raceShowLobby();raceUpdateScores({});if(m)raceNotice('Permainan selesai. Skor kedua tim sudah direset.');return;}if(raceMatchId!==m.matchId){raceLocalScores={A:0,B:0};raceMyAnswers={};if(raceTotalTimer){clearInterval(raceTotalTimer);raceTotalTimer=null;}}raceMatchId=m.matchId||'';raceFinished=false;if(m.status==='countdown'){raceQuestionVisible=true;raceRunCountdown(m.startAt)}else if(m.status==='playing'||Date.now()>=m.startAt){raceQuestionVisible=true;if(!raceAllPlayersReady)return;stopRaceCountdown();raceStarted=true;raceReady=true;window.__boatTimerUnlocked=true;window.__boatDeadline=Number(m.startAt)+(window.__boatTotalSeconds||600)*1000;raceShowLobby();}};raceMatchRef.on('value',raceMatchListener);
   racePlayersRef=players;players.on('value',snap=>{const valid=Object.values(snap.val()||{}).filter(x=>Date.now()-(Number(x.at)||0)<30000);const a=valid.filter(x=>x.team==='A').length,b=valid.filter(x=>x.team==='B').length;const ready=valid.filter(x=>x.ready).length;raceAllPlayersReady=!!(a&&b&&valid.length>=2&&valid.every(x=>x.ready===true));if(!raceAllPlayersReady&&!raceStarted){stopRaceCountdown();window.__boatTimerUnlocked=false;window.__boatDeadline=0;raceReady=false;raceShowLobby();}const info=$('boatReadyInfo');if(info)info.textContent='Online: Tim A '+a+' • Tim B '+b+' • Siap '+ready+'/'+valid.length;if(!raceStarted&&!raceCountdown){raceNotice('Pilih TIM A atau B, lalu tekan SAYA SIAP. Permainan dimulai setelah hitung mundur 10 detik.');}if(raceAllPlayersReady)raceStartMatchIfReady(valid).catch(console.warn);raceLockUI();},e=>raceNotice('Gagal membaca pemain: '+e.message));
   raceScoresRef=d.ref(roomPath()+'/raceRounds');raceScoresRef.on('value',snap=>raceUpdateScores(snap.val()));raceShowLobby();
  }catch(e){raceReady=false;raceNotice('Tidak dapat bergabung: '+e.message)}finally{raceJoining=false}
@@ -2548,6 +2575,93 @@ async function submitRaceAnswer(idx,fromTimer=false){
  setTimeout(()=>{if(!$('game')?.classList.contains('hidden') && $('gameMessage')?.style.display!=='flex' && getQ()===q){if(Number(window.gameIndex||0)<(window.__gameApi?.getState?.()?.gameQuestions?.length||1)-1)window.__gameApi?.nextQuestion();else raceFinishMatch();}},1400);
 }
 async function raceFinishMatch(){window.__boatTimerUnlocked=false;window.__boatDeadline=0;raceFinished=true;raceStarted=false;raceReady=false;stopRaceTimer();stopRaceCountdown();raceShowLobby();raceUpdateScores({});raceNotice('Selesai! Skor tim A dan B direset; riwayat jawaban tetap tersimpan di Firebase.');try{await raceMatchRef?.transaction(v=>v&&v.matchId===raceMatchId?{...v,status:'finished',finishedAt:Date.now()}:undefined)}catch(e){console.warn(e)}}
+
+// FIX GAME PERAHU: skor tersimpan, siap/countdown sekali per pertandingan, dan hasil muncul saat waktu total habis.
+let raceTotalTimer=null, raceMatchDeadline=0, raceLocalScores={A:0,B:0}, raceMyAnswers={};
+const raceOriginalRender=renderBoatQuestion;
+raceUpdateScores=function(data){
+ let a=0,b=0;
+ Object.values(data||{}).forEach(round=>Object.values(round?.answers||{}).forEach(v=>{
+  if(v.matchId===raceMatchId&&v.correct){if(v.team==='A')a+=Number(v.points)||0;else if(v.team==='B')b+=Number(v.points)||0;}
+ }));
+ // Pertahankan skor lokal jika koneksi database sedang lambat.
+ a=Math.max(a,raceLocalScores.A); b=Math.max(b,raceLocalScores.B);
+ if($('raceScoreA'))$('raceScoreA').textContent=a;
+ if($('raceScoreB'))$('raceScoreB').textContent=b;
+ if($('raceProgressA'))$('raceProgressA').style.width=Math.min(100,a)+'%';
+ if($('raceProgressB'))$('raceProgressB').style.width=Math.min(100,b)+'%';
+};
+function startRaceTotalTimer(deadline){
+ raceMatchDeadline=Number(deadline)||Date.now()+((Number(window.__boatTotalSeconds)||120)*1000);
+ if(raceTotalTimer)clearInterval(raceTotalTimer);
+ const tick=()=>{
+  const left=Math.max(0,Math.ceil((raceMatchDeadline-Date.now())/1000));
+  const t=$('boatRaceTime'); if(t)t.textContent=left;
+  const bar=$('boatRaceTimeBar');if(bar)bar.style.width=(left/Math.max(1,Number(window.__boatTotalSeconds)||120)*100)+'%';
+  if(left<=0){clearInterval(raceTotalTimer);raceTotalTimer=null;raceFinishMatch();}
+ };
+ tick();raceTotalTimer=setInterval(tick,250);
+}
+const oldRaceRunCountdown=raceRunCountdown;
+raceRunCountdown=function(startAt){
+ if(raceStarted && raceMatchDeadline>Date.now())return;
+ oldRaceRunCountdown(startAt);
+ if(!raceTotalTimer){const check=setInterval(()=>{if(raceStarted&&!raceFinished){clearInterval(check);startRaceTotalTimer(Number(startAt)+(Number(window.__boatTotalSeconds)||120)*1000);}else if(raceFinished||!raceCountdown&&Date.now()>Number(startAt)+15000)clearInterval(check);},200);}
+};
+const oldRaceChoose=chooseRaceAnswer;
+chooseRaceAnswer=function(idx){
+ if(!raceReady||!raceStarted||raceFinished){raceNotice('Tunggu hitung mundur awal selesai.');return;}
+ if(raceAnswered){raceNotice('Jawaban soal ini sudah dikirim. Tunggu soal berikutnya.');return;}
+ if(!getQ()||!document.querySelector('#boatRaceAnswers [data-race-answer="'+idx+'"]'))return;
+ raceSelected=Number(idx);
+ document.querySelectorAll('#boatRaceAnswers button').forEach((b,i)=>{b.classList.toggle('chosen',i===raceSelected);b.setAttribute('aria-pressed',i===raceSelected?'true':'false')});
+ submitRaceAnswer(raceSelected,false);
+};
+submitRaceAnswer=async function(idx,fromTimer=false){
+ const q=getQ(),d=db();
+ if(!raceReady||!raceStarted||raceFinished||!d||!q||raceAnswered)return;
+ const finalIdx=Number(idx);
+ if(!Number.isInteger(finalIdx)||finalIdx<0)return;
+ raceAnswered=true;stopRaceTimer();
+ const correct=finalIdx===Number(q.correct),pts=correct?20:0;
+ if(correct)raceLocalScores[team==='B'?'B':'A']+=pts;
+ document.querySelectorAll('#boatRaceAnswers button').forEach((b,i)=>{b.disabled=true;if(i===finalIdx)b.classList.add('chosen');if(i===Number(q.correct))b.style.borderColor='#22c55e'});
+ raceNotice(correct?'✅ Benar! +20 poin untuk TIM '+team+'. Pertandingan tetap berjalan sampai waktu total habis.':'Jawaban tersimpan. '+(correct?'':'Belum tepat.')+' Pertandingan tetap berjalan sampai waktu total habis.');
+ window.__studentAnswerLog=window.__studentAnswerLog||[];
+ window.__studentAnswerLog.push({question:q.q||q.question||'',type:'boat-race',selected:(q.a||[])[finalIdx]||'',selectedLetter:'ABCD'[finalIdx]||'',correctAnswer:(q.a||[])[q.correct]||'',isCorrect:correct,team,points:pts,at:new Date().toISOString()});
+ if(correct){try{window.xp=(window.xp||0)+20}catch(e){}}
+ const accountKey=studentResultKey();
+ if(d&&room){const ref=d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers/'+accountKey+'_'+String(raceMatchId||'sesi').replace(/[^a-zA-Z0-9_-]/g,'_'));
+  try{await ref.set({accountKey,name:person,team,matchId:raceMatchId,game:'Game Perahu',answer:finalIdx,selected:(q.a||[])[finalIdx]||'',question:q.q||q.question||'',correctAnswer:(q.a||[])[q.correct]||'',correct,points:pts,at:Date.now()});
+   const all=(await d.ref(roomPath()+'/raceRounds/'+String(window.gameIndex||0)+'/answers').once('value')).val()||{};
+   let a=0,b=0;Object.values(all).forEach(v=>{if(v.correct&&v.matchId===raceMatchId){if(v.team==='A')a+=Number(v.points)||0;else if(v.team==='B')b+=Number(v.points)||0}});
+   raceLocalScores.A=Math.max(raceLocalScores.A,a);raceLocalScores.B=Math.max(raceLocalScores.B,b);raceUpdateScores({});
+  }catch(e){raceNotice('Jawaban dipilih, tetapi skor belum tersimpan ke server. Periksa koneksi Firebase.');}
+ }
+ // Jangan mengakhiri pertandingan lebih awal. Beralih soal setelah jawaban terkunci.
+ setTimeout(()=>{if(!raceFinished&&gameOn()&&getQ()===q){
+  if(Number(window.gameIndex||0)<(window.__gameApi?.getState?.()?.gameQuestions?.length||1)-1)window.__gameApi?.nextQuestion();
+  else raceNotice('Semua soal selesai dijawab. Menunggu waktu total pertandingan habis untuk menentukan pemenang.');
+ }},900);
+};
+raceFinishMatch=async function(){
+ if(raceFinished)return;
+ raceFinished=true;raceStarted=false;raceReady=false;stopRaceTimer();stopRaceCountdown();
+ if(raceTotalTimer){clearInterval(raceTotalTimer);raceTotalTimer=null;}
+ window.__boatTimerUnlocked=false;window.__boatDeadline=0;
+ let a=Number($('raceScoreA')?.textContent)||raceLocalScores.A,b=Number($('raceScoreB')?.textContent)||raceLocalScores.B;
+ try{const d=db();if(d&&room){const snap=await d.ref(roomPath()+'/raceRounds').once('value');a=0;b=0;Object.values(snap.val()||{}).forEach(round=>Object.values(round?.answers||{}).forEach(v=>{if(v.matchId===raceMatchId&&v.correct){if(v.team==='A')a+=Number(v.points)||0;else if(v.team==='B')b+=Number(v.points)||0}}));}}catch(e){}
+ if($('raceScoreA'))$('raceScoreA').textContent=a;if($('raceScoreB'))$('raceScoreB').textContent=b;
+ const winner=a===b?'🤝 Seri! Kedua tim mendapat poin sama.':a>b?'🏆 TIM A MENANG!':'🏆 TIM B MENANG!';
+ raceNotice('⏰ Waktu total habis! '+winner+' Skor akhir — TIM A: '+a+' poin · TIM B: '+b+' poin.');
+ const prompt=$('racePrompt');if(prompt)prompt.textContent=winner+' Skor akhir: TIM A '+a+' — TIM B '+b;
+ raceQuestionVisible=false;
+ const answers=$('boatRaceAnswers');if(answers)answers.style.display='none';
+ const lobby=$('boatRaceLobby');if(lobby){lobby.style.display='flex';lobby.innerHTML='<h2 style="margin:0">🏁 HASIL AKHIR LOMBA PERAHU</h2><div style="font-size:26px;font-weight:900">'+winner+'</div><p style="font-size:20px">🟦 TIM A: '+a+' poin<br>🟥 TIM B: '+b+' poin</p><p>Permainan selesai. Poin dihitung dari jawaban benar seluruh pertandingan.</p>';}
+ try{await raceMatchRef?.transaction(v=>v&&v.matchId===raceMatchId?{...v,status:'finished',finishedAt:Date.now(),scoreA:a,scoreB:b,winner:a===b?'seri':a>b?'A':'B'}:undefined)}catch(e){console.warn(e)}
+ raceShowLobby();
+};
+
 document.addEventListener('click',e=>{if(e.target.closest('#boatReadyButton')){e.preventDefault();markRaceReady();return;}const pick=e.target.closest('[data-race-team]');if(pick){e.preventDefault();selectRaceTeam(pick.dataset.raceTeam);return;}const boat=e.target.closest('[data-race-answer]');if(boat){e.preventDefault();chooseRaceAnswer(Number(boat.dataset.raceAnswer))}},true);
 const oldStart=window.startStudentGame;
 window.startStudentGame=async function(){if(typeof oldStart==='function')oldStart();const n=($('studentName')?.value||'').trim();if(!n)return;person=n;role='student';room=roomFromForm();team='';connectChat();setTimeout(setupBoatRace,250);};
